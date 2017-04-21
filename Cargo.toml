@@ -1,0 +1,18 @@
+[package]
+name = "latex-service"
+version = "0.1.0"
+authors = ["Tom Houlé <tom@tomhoule.com>"]
+
+[dependencies]
+futures = "*"
+mktemp = "*"
+hyper = { git = "https://github.com/hyperium/hyper" }
+multipart = "*"
+tera = "*"
+tokio-core = "*"
+tokio-process = "*"
+tokio-service = "*"
+
+[[bin]]
+name = "latex-service-server"
+path = "./src/server.rs"
