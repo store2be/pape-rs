@@ -7,18 +7,21 @@ use hyper::mime::{Mime, TopLevel, SubLevel, Attr, Value};
 use hyper::server::{Request, Response};
 use tokio_service::Service;
 use multipart::server::Multipart;
-use multipart::server::save::{Entries, SaveResult};
 use std::thread;
+use std::path::PathBuf;
+use workspace::Workspace;
 
 pub struct PdfRenderer;
 
 impl PdfRenderer {
     fn render_pdf(&self, req: Request) -> Box<Future<Item=Response, Error=hyper::Error>> {
-        let headers = req.headers();
+        let content_type = {
+            req.headers().get::<ContentType>().map(|c| c.clone())
+        };
 
         // Return an error if the content type is not multipart/form-data
-        let boundary = result(match headers.get::<ContentType>() {
-            Some(&ContentType(Mime(TopLevel::Multipart, SubLevel::FormData, params))) =>
+        let boundary = result(match content_type {
+            Some(ContentType(Mime(TopLevel::Multipart, SubLevel::FormData, ref params))) =>
                 params.iter().find(|param| {
                     match param.0 { Attr::Boundary => true, _ => false }
                 }).map(|param| param.1),
@@ -26,35 +29,39 @@ impl PdfRenderer {
         }.ok_or(hyper::Error::Header));
 
         // Receive all the body chunks into a vector
-        let body = req.body().fold(Vec::new(), |acc, chunk| {
+        let body = req.body().fold(Vec::new(), |mut acc, chunk| {
             acc.extend_from_slice(&chunk);
-            ok(acc)
+            ok::<_, hyper::Error>(acc)
         });
 
         // Parse the body and save the files in a temporary directory
         let multipart = boundary.join(body).map(|(boundary, body): (Value, Vec<u8>)| {
-            let multipart = Multipart::with_body(body.as_slice(), boundary.as_str());
-            multipart.save().temp()
+            Multipart::with_body(body.as_slice(), boundary.as_str())
         });
+
+        // Perform the main computation
+        let work = multipart.map(|multipart: Multipart<_>| {
+            Workspace::new(multipart)
+        });
+
 
         // Extract the path of the temporary directory
-        let workspace = multipart.and_then(|save_result: SaveResult<Entries, _>| match save_result {
-            SaveResult::Full(entries) => Ok(entries),
-            _ => Err(hyper::Error::Timeout)
-        }).map(|entries| entries.save_dir.into_path());
+        // let workspace = multipart.and_then(|save_result: SaveResult<Entries, _>| match save_result {
+        //     SaveResult::Full(entries) => Ok(entries),
+        //     _ => Err(hyper::Error::Timeout)
+        // }).map(|entries| entries.save_dir.into_path());
 
         // Spawn the command in a separate thread, wait for it to finish, return the resulting pdf
-        let command_output = workspace.and_then(|workspace: PathBuf| {
+        // let command_output = workspace.and_then(|workspace: PathBuf| {
             // tokio_process spawn, check exit code, return an async reader to that file
-        });
+        // });
 
         // create a response
         // then forward the pdf into the response body
         // send it to the documents endpoint from the request
 
         // return the response
-        // response.boxed()
-        unimplemented!()
+        work.map(|_| Response::new().with_status(StatusCode::Ok)).boxed()
     }
 
     fn health_check(&self, _: Request) -> BoxFuture<Response, hyper::Error> {

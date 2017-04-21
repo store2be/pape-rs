@@ -1,18 +1,24 @@
 [package]
-name = "latex-service"
+name = "pape"
 version = "0.1.0"
-authors = ["Tom Houlé <tom@tomhoule.com>"]
+authors = [
+    "Peter Gundel <peter.gundel@store2be.com",
+    "Fausto Núñez Alberro <fausto.nunez@store2be.com>",
+    "Tom Houlé <tom.houle@store2be.com>",
+]
 
 [dependencies]
 futures = "*"
 mktemp = "*"
 hyper = { git = "https://github.com/hyperium/hyper" }
-multipart = "*"
+serde = "*"
+serde_derive = "*"
+serde_json = "*"
 tera = "*"
 tokio-core = "*"
 tokio-process = "*"
 tokio-service = "*"
 
 [[bin]]
-name = "latex-service-server"
+name = "pape-server"
 path = "./src/server.rs"
