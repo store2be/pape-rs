@@ -5,7 +5,7 @@ pub struct Template {
 }
 
 impl Template {
-    fn from_blob() -> Template {
+    fn from_blob(bytes: Vec<u8>) -> Template {
         unimplemented!();
     }
 
