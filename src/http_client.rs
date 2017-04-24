@@ -17,15 +17,11 @@ fn determine_get_result(res: Response) -> Result<GetResult, Error> {
         StatusCode::TemporaryRedirect | StatusCode::PermanentRedirect => {
             match res.headers().get::<Location>() {
                 Some(location) => Ok(GetResult::Redirect(location.parse()?)),
-                // future::Loop::Continue(self.download_file(location.parse().unwrap())),
                 None => Err(Error::UnprocessableEntity),
             }
         },
         StatusCode::Ok => Ok(GetResult::Ok(res)),
-        // future::ok(future::Loop::Break(Ok(None)))
-        //Ok(future::Loop::Break(Some(response.body()))),
-        // }).boxed()
-        _ => unreachable!(),
+        _ => Err(Error::UnprocessableEntity),
     }
 }
 

@@ -21,11 +21,19 @@ pub struct Workspace {
     template_path: ::std::path::PathBuf,
 }
 
-/// We ignore file names that end with a slash for now, and always determine the file name from the
-/// Uri
+/// We ignore file names that end with a slash for now, and always determine the file name from the Uri
 /// TODO: investigate Content-Disposition: attachment
 fn extract_file_name_from_uri(uri: &Uri) -> Option<String> {
-    uri.path().split('/').last().map(|name| name.to_string())
+    match uri.path().split('/').last() {
+        Some(name) => {
+            if !name.is_empty() {
+                Some(name.to_string())
+            } else {
+                None
+            }
+        },
+        None => None,
+    }
 }
 
 /// Since mktemp::Temp implements Drop by deleting the directory, we don't need to worry about
@@ -115,5 +123,25 @@ impl Workspace {
                 .map_err(|_| ());
 
         final_handle.spawn(work);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use hyper::Uri;
+    use super::extract_file_name_from_uri;
+
+    #[test]
+    fn test_extract_file_name_from_uri_works() {
+        let assert_extracted = |input: &'static str, expected_output: Option<&'static str>| {
+            let uri = input.parse::<Uri>().unwrap();
+            assert_eq!(extract_file_name_from_uri(&uri), expected_output.map(|o| o.to_string()));
+        };
+
+        assert_extracted("/logo.png", Some("logo.png"));
+        assert_extracted("/assets/", None);
+        assert_extracted("/assets/icon", Some("icon"));
+        assert_extracted("/", None);
+        assert_extracted("http://www.store2be.com", None);
     }
 }
