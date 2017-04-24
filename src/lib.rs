@@ -7,6 +7,7 @@ extern crate serde_json;
 extern crate serde_derive;
 extern crate tera;
 extern crate tokio_core;
+extern crate tokio_io;
 extern crate tokio_service;
 
 mod error;

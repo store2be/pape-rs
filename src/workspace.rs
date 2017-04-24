@@ -8,9 +8,11 @@ use hyper::header::{Location};
 use mktemp::Temp;
 use std::io;
 use std::io::prelude::*;
-use std::io::BufReader;
+use std::io::{BufReader, BufWriter};
 use std::iter;
 use std::collections::HashMap;
+use std::path::Path;
+use tokio_io::AsyncWrite;
 use tokio_core::reactor::{Handle, Remote};
 use tera::Tera;
 
@@ -95,14 +97,19 @@ impl Workspace {
         self.handle.spawn(empty())
     }
 
-    fn download_template(self) -> Box<Future<Item=(Workspace, String), Error=Error>> {
-        let (handle, uri, variables) = {
+    fn download_template(self) -> Box<Future<Item=Workspace, Error=Error>> {
+        let (handle, uri, template_path, variables) = {
+            let mut template_path = self.dir.to_path_buf();
+            template_path.push(Path::new("template.tex"));
+
             (
                 self.handle.clone(),
                 self.document_spec.template_url.0.clone(),
+                template_path,
                 self.document_spec.variables.clone().unwrap_or(HashMap::new()),
             )
         };
+
         Box::new(
             download_file(&handle, uri)
                 .and_then(|bytes| {
@@ -111,7 +118,10 @@ impl Workspace {
                 }).and_then(move |template_string| {
                     Tera::one_off(&template_string, &variables, false)
                         .map_err(Error::from)
-                }).map(|latex_doc| (self, latex_doc))
+                }).and_then(|latex_string| {
+                    let mut file = ::std::fs::File::open(template_path).unwrap();
+                    future::ok(file.write_all(latex_string.as_bytes()).unwrap())
+                }).map(|_| self)
         )
     }
 
@@ -129,7 +139,7 @@ impl Workspace {
         unimplemented!()
     }
 
-    fn generate_latex(files: Vec<String>) -> BoxFuture<(), io::Error> {
+    fn generate_latex() -> BoxFuture<(), io::Error> {
         unimplemented!()
     }
 
