@@ -25,3 +25,11 @@ mod uri_deserializer {
         uri_string.parse().map_err(serde::de::Error::custom)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    // extern crate serde_test;
+
+    // #[test]
+    // fn it_tests
+}

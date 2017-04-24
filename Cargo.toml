@@ -21,5 +21,6 @@ tokio-process = "*"
 tokio-service = "*"
 
 [[bin]]
-name = "pape-server"
-path = "./src/server.rs"
+name = "papers-server"
+path = "./src/main.rs"
+test = false
