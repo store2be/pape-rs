@@ -13,6 +13,7 @@ extern crate tokio_process;
 
 mod server;
 mod error;
+mod http_client;
 mod papers;
 mod workspace;
 

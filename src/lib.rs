@@ -12,6 +12,7 @@ extern crate tokio_service;
 extern crate tokio_process;
 
 mod error;
+mod http_client;
 mod papers;
 mod workspace;
 pub mod server;
