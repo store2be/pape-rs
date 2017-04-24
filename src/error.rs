@@ -6,8 +6,9 @@ use tera;
 pub enum Error {
     Hyper(hyper::Error),
     Tera(tera::Error),
-    UnprocessableEntity,
     UriError(hyper::error::UriError),
+    UnprocessableEntity,
+    LatexFailed,
 }
 
 impl Error {
@@ -17,6 +18,7 @@ impl Error {
             Error::Tera(_) | Error::UriError(_) | Error::Hyper(_) => {
                 Response::new().with_status(StatusCode::InternalServerError)
             },
+            _ => unreachable!(),
         }
     }
 }
@@ -45,3 +47,8 @@ impl From<tera::Error> for Error {
     }
 }
 
+impl From<::std::io::Error> for Error {
+    fn from(err: ::std::io::Error) -> Error {
+        Error::UnprocessableEntity
+    }
+}

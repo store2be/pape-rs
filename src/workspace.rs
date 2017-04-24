@@ -12,8 +12,10 @@ use std::io::{BufReader, BufWriter};
 use std::iter;
 use std::collections::HashMap;
 use std::path::Path;
+use std::process::{Command, ExitStatus};
 use tokio_io::AsyncWrite;
 use tokio_core::reactor::{Handle, Remote};
+use tokio_process::CommandExt;
 use tera::Tera;
 
 use papers::DocumentSpec;
@@ -28,6 +30,7 @@ pub struct Workspace {
     dir: Temp,
     document_spec: DocumentSpec,
     handle: Handle,
+    template_path: ::std::path::PathBuf,
 }
 
 /// We ignore file names that end with a slash for now, and always determine the file name from the
@@ -83,10 +86,14 @@ fn download_file(handle: &Handle, uri: Uri) -> Box<Future<Item=Vec<u8>, Error=Er
 /// leaving files or directories behind.
 impl Workspace {
     pub fn new(remote: Remote, document_spec: DocumentSpec) -> Result<Workspace, io::Error> {
+        let dir = Temp::new_dir()?;
+        let mut template_path = dir.to_path_buf();
+        template_path.push(Path::new("template.tex"));
         Ok(Workspace {
-            dir: Temp::new_dir()?,
             document_spec,
             handle: remote.handle().unwrap(),
+            template_path,
+            dir,
         })
     }
 
@@ -99,13 +106,10 @@ impl Workspace {
 
     fn download_template(self) -> Box<Future<Item=Workspace, Error=Error>> {
         let (handle, uri, template_path, variables) = {
-            let mut template_path = self.dir.to_path_buf();
-            template_path.push(Path::new("template.tex"));
-
             (
                 self.handle.clone(),
                 self.document_spec.template_url.0.clone(),
-                template_path,
+                self.template_path.clone(),
                 self.document_spec.variables.clone().unwrap_or(HashMap::new()),
             )
         };
@@ -139,14 +143,22 @@ impl Workspace {
         unimplemented!()
     }
 
-    fn generate_latex() -> BoxFuture<(), io::Error> {
-        unimplemented!()
-    }
-
-    fn run_latex<T: Read>() -> BoxFuture<BufReader<T>, io::Error> {
+    fn run_latex(self) -> Box<Future<Item = (), Error = Error>> {
         // tokio_process spawn, check exit code, and then open the file, return an async reader to
         // that file
-        unimplemented!()
+        let output = Command::new("pdflatex")
+            .arg(self.template_path.to_str().unwrap())
+            .status_async(&self.handle.clone());
+        Box::new(
+            output.map_err(Error::from)
+            .and_then(|exit_status| {
+                if exit_status.success() {
+                    Ok(())
+                } else {
+                    Err(Error::LatexFailed)
+                }
+            })
+        )
     }
 
     fn post_generated_pdf() -> BoxFuture<Response, hyper::Error> {
