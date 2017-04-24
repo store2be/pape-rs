@@ -2,8 +2,8 @@ use futures::future;
 use futures::Stream;
 use futures::future::{LoopFn, BoxFuture, Future, empty};
 use hyper;
-use hyper::{Body, Uri, StatusCode};
-use hyper::client::{Client, HttpConnector, Response};
+use hyper::{Uri, StatusCode};
+use hyper::client::{Client, Response};
 use hyper::header::{Location};
 use mktemp::Temp;
 use std::io;
@@ -107,7 +107,7 @@ impl Workspace {
                 self.handle.clone(),
                 self.document_spec.template_url.0.clone(),
                 self.template_path.clone(),
-                self.document_spec.variables.clone().unwrap_or(HashMap::new()),
+                self.document_spec.variables.clone(),
             )
         };
 
