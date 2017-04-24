@@ -1,14 +1,9 @@
 use futures::future;
-use futures::Stream;
-use futures::future::{LoopFn, BoxFuture, Future, empty};
-use hyper;
-use hyper::{Uri, StatusCode};
-use hyper::client::{Client, Response};
+use futures::Future;
+use hyper::Uri;
 use mktemp::Temp;
-use std::default::Default;
 use std::io;
 use std::io::prelude::*;
-use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
 use tokio_core::reactor::{Handle, Remote};
@@ -59,7 +54,7 @@ impl Workspace {
 
         let DocumentSpec {
             assets_urls,
-            callback_url,
+            callback_url: _,
             template_url,
             variables,
         } = document_spec;

@@ -19,7 +19,7 @@ pub struct DocumentSpec {
 
 mod uri_deserializer {
     use hyper::Uri;
-    use serde::{self, Deserialize, Serializer, Deserializer};
+    use serde::{self, Deserialize, Deserializer};
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Uri, D::Error>
         where D: Deserializer<'de> {
@@ -34,7 +34,6 @@ fn default_assets() -> Vec<PapersUri> { Vec::new() }
 
 #[cfg(test)]
 mod tests {
-    use hyper::Uri;
     use super::DocumentSpec;
     use serde_json::from_str;
 

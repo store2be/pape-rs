@@ -1,5 +1,4 @@
 use error::Error;
-use futures;
 use futures::future;
 use futures::{Future, Stream};
 use hyper;

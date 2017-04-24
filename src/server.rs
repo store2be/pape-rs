@@ -17,7 +17,7 @@ impl Server {
         }
     }
 
-    pub fn with_port(mut self, port: i32) -> Server {
+    pub fn with_port(self, port: i32) -> Server {
         Server {
             port: port,
         }
@@ -37,4 +37,3 @@ impl Server {
         core.run(work).unwrap()
     }
 }
-

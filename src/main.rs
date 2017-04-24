@@ -19,5 +19,8 @@ mod workspace;
 
 
 fn main() {
-    server::Server::new().start()
+    let port = ::std::env::var("PAPERS_PORT").unwrap_or("8080".to_string());
+    server::Server::new()
+        .with_port(port.parse().unwrap())
+        .start()
 }
