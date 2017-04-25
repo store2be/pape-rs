@@ -40,7 +40,7 @@ fn extract_file_name_from_uri(uri: &Uri) -> Option<String> {
 /// leaving files or directories behind.
 impl Workspace {
 
-    pub fn new(remote: Remote, document_spec: DocumentSpec) -> Result<Workspace, io::Error> {
+    pub fn new(remote: Remote, document_spec: DocumentSpec) -> Result<Workspace, Error> {
         let dir = Temp::new_dir()?;
         let mut template_path = dir.to_path_buf();
         template_path.push(Path::new("template.tex"));
@@ -52,7 +52,35 @@ impl Workspace {
         })
     }
 
-    pub fn execute(self) {
+    pub fn preview(self) -> Box<Future<Item=String, Error=Error>> {
+        let Workspace {
+            handle,
+            document_spec,
+            template_path: _,
+            dir: _,
+        } = self;
+
+        let DocumentSpec {
+            assets_urls: _,
+            callback_url: _,
+            template_url,
+            variables,
+        } = document_spec;
+
+        // Download the template and populate it
+        let work = http_client::download_file(&handle.clone(), template_url.0)
+            .and_then(|bytes| {
+                future::result(::std::string::String::from_utf8(bytes))
+                    .map_err(Error::from)
+            }).and_then(move |template_string| {
+                Tera::one_off(&template_string, &variables, false)
+                    .map_err(Error::from)
+            });
+
+        Box::new(work)
+    }
+
+    pub fn execute(self) -> Box<Future<Item=Vec<u8>, Error=Error>> {
         let Workspace {
             handle,
             document_spec,
@@ -66,8 +94,6 @@ impl Workspace {
             template_url,
             variables,
         } = document_spec;
-
-        let final_handle = handle.clone();
 
         // First download the template and populate it
         let work = http_client::download_file(&handle.clone(), template_url.0)
@@ -112,17 +138,15 @@ impl Workspace {
                         .arg(template_path.clone().to_str().unwrap())
                         .status_async(&handle.clone())
                         .map_err(Error::from)
-                        .and_then(|exit_status| {
-                            if exit_status.success() {
-                                Ok(())
-                            } else {
-                                Err(Error::LatexFailed)
-                            }
-                        })
-                })
-                .map_err(|_| ());
+                }).and_then(|exit_status| {
+                    if exit_status.success() {
+                        future::ok(())
+                    } else {
+                        future::err(Error::LatexFailed)
+                    }
+                }).map(|_| Vec::new());
 
-        final_handle.spawn(work);
+        Box::new(work)
     }
 }
 

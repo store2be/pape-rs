@@ -6,6 +6,7 @@ use tera;
 pub enum Error {
     Hyper(hyper::Error),
     Tera(tera::Error),
+    InternalServerError,
     UriError(hyper::error::UriError),
     UnprocessableEntity,
     LatexFailed,
@@ -15,6 +16,7 @@ impl Error {
     pub fn into_response(self) -> Response {
         match self {
             Error::UnprocessableEntity => Response::new().with_status(StatusCode::UnprocessableEntity),
+            Error::InternalServerError => Response::new().with_status(StatusCode::InternalServerError),
             Error::Tera(_) | Error::UriError(_) | Error::Hyper(_) => {
                 Response::new().with_status(StatusCode::InternalServerError)
             },
