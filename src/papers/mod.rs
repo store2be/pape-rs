@@ -22,7 +22,7 @@ pub struct Papers {
 impl Papers {
     pub fn new(remote: Remote) -> Papers {
         Papers {
-            remote,
+            remote: remote,
         }
     }
 

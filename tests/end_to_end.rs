@@ -6,7 +6,7 @@ extern crate slog;
 extern crate slog_envlogger;
 extern crate tokio_core;
 extern crate tokio_service;
-extern crate pape;
+extern crate papers;
 extern crate serde_json as json;
 
 use futures::future;
@@ -32,7 +32,7 @@ struct MockServer {
 
 impl MockServer {
     pub fn new(sender: mpsc::Sender<server::Request>) -> MockServer {
-        MockServer { sender }
+        MockServer { sender: sender }
     }
 }
 
@@ -60,7 +60,7 @@ fn test_end_to_end() {
     let (sender, receiver) = mpsc::channel(30);
 
     std::thread::spawn(|| {
-        pape::server::Server::new().with_port(8019).start();
+        papers::server::Server::new().with_port(8019).start();
     });
 
     std::thread::spawn(move || {
