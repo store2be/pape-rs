@@ -159,11 +159,15 @@ impl Workspace {
                     future::ok((handle, path))
                 })
 
-        // Finally, post it to the callback URL
-                .and_then(move |(handle, pdf_path)| {
+        // Then get the bytes from the generated PDF path
+                .and_then(|(handle, pdf_path)| {
                     let pdf_file = ::std::fs::File::open(pdf_path).unwrap();
                     let pdf_bytes: Vec<u8> = pdf_file.bytes().collect::<Result<Vec<u8>, _>>().unwrap();
+                    future::ok((handle, pdf_bytes))
+                })
 
+        // Finally, post the PDF to the callback URL
+                .and_then(move |(handle, pdf_bytes)| {
                     let mut request = Request::new(Post, callback_url.0);
                     request.set_body(pdf_bytes);
 
