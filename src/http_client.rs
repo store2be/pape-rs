@@ -1,4 +1,4 @@
-use error::Error;
+use error::*;
 use futures::future;
 use futures::{Future, Stream};
 use hyper;
@@ -12,16 +12,16 @@ enum GetResult {
     Redirect(Uri),
 }
 
-fn determine_get_result(res: Response) -> Result<GetResult, Error> {
+fn determine_get_result(res: Response) -> Result<GetResult> {
     match res.status() {
         StatusCode::TemporaryRedirect | StatusCode::PermanentRedirect => {
             match res.headers().get::<Location>() {
                 Some(location) => Ok(GetResult::Redirect(location.parse()?)),
-                None => Err(Error::UnprocessableEntity),
+                None => Err(ErrorKind::UnprocessableEntity.into()),
             }
         },
         StatusCode::Ok => Ok(GetResult::Ok(res)),
-        _ => Err(Error::UnprocessableEntity),
+        _ => Err(ErrorKind::UnprocessableEntity.into()),
     }
 }
 

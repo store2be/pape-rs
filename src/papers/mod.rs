@@ -11,7 +11,7 @@ use serde_json;
 use tokio_service::{NewService, Service};
 use tokio_core::reactor::Remote;
 
-use error::Error;
+use error::{Error, ErrorKind};
 pub use self::document_spec::DocumentSpec;
 use workspace::Workspace;
 
@@ -34,7 +34,7 @@ impl Papers {
         // Return an error if the content type is not application/json
         match content_type {
             Some(ContentType(Mime(TopLevel::Application, SubLevel::Json, _))) => (),
-            _ => return Box::new(err(Error::UnprocessableEntity)),
+            _ => return Box::new(err(ErrorKind::UnprocessableEntity.into())),
         };
 
         let remote = self.remote.clone();
@@ -42,7 +42,7 @@ impl Papers {
 
         let response = req.body()
             // Ignore hyper errors (i.e. io error, invalid utf-8, etc.) for now
-            .map_err(|_| Error::UnprocessableEntity)
+            .map_err(|_| ErrorKind::UnprocessableEntity.into())
             .fold(Vec::new(), |mut acc, chunk| {
             // Receive all the body chunks into a vector
             acc.extend_from_slice(&chunk);
@@ -54,18 +54,18 @@ impl Papers {
         .and_then(|body| {
             result(
                 serde_json::from_slice::<DocumentSpec>(body.as_slice())
-                    .map_err(|_| Error::UnprocessableEntity)
+                    .map_err(|err| Error::with_chain(err, ErrorKind::UnprocessableEntity))
             )
         })
 
         // Handle the parsed request
-        .map_err(|_| Error::InternalServerError)
+        .map_err(|_| ErrorKind::InternalServerError.into())
         .and_then(|document_spec| {
             result(Workspace::new(remote, document_spec))
         }).and_then(move |workspace| {
-            handle.spawn(workspace.execute().map(|_| ()).map_err(|_| ()));
+            handle.spawn(workspace.execute().map(|_| ()).map_err(|err| panic!("{}", err)));
             ok(Response::new().with_status(StatusCode::Ok))
-        }).map_err(|_| Error::InternalServerError);
+        }).map_err(|_| ErrorKind::InternalServerError.into());
 
         Box::new(response)
     }
@@ -78,14 +78,14 @@ impl Papers {
         // Return an error if the content type is not application/json
         match content_type {
             Some(ContentType(Mime(TopLevel::Application, SubLevel::Json, _))) => (),
-            _ => return Box::new(err(Error::UnprocessableEntity)),
+            _ => return Box::new(err(ErrorKind::UnprocessableEntity.into())),
         };
 
         let remote = self.remote.clone();
 
         let response = req.body()
             // Ignore hyper errors (i.e. io error, invalid utf-8, etc.) for now
-            .map_err(|_| Error::UnprocessableEntity)
+            .map_err(|err| Error::with_chain(err, ErrorKind::UnprocessableEntity))
             .fold(Vec::new(), |mut acc, chunk| {
             // Receive all the body chunks into a vector
             acc.extend_from_slice(&chunk);
@@ -97,14 +97,14 @@ impl Papers {
         .and_then(|body| {
             result(
                 serde_json::from_slice::<DocumentSpec>(body.as_slice())
-                    .map_err(|_| Error::UnprocessableEntity)
+                    .map_err(|_| ErrorKind::UnprocessableEntity.into())
             )
         })
 
         // Handle the parsed request
         .and_then(|document_spec| {
             result(Workspace::new(remote, document_spec))
-                .map_err(|_| Error::InternalServerError)
+                .map_err(|err| Error::with_chain(err, ErrorKind::InternalServerError))
         })
         .and_then(|workspace| {
             workspace.preview()

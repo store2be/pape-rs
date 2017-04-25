@@ -13,7 +13,7 @@ use tera::Tera;
 
 use http_client;
 use papers::DocumentSpec;
-use error::Error;
+use error::{Error, ErrorKind};
 
 pub struct Workspace {
     dir: Temp,
@@ -148,7 +148,7 @@ impl Workspace {
                     if exit_status.success() {
                         future::ok(handle)
                     } else {
-                        future::err(Error::LatexFailed)
+                        future::err(ErrorKind::LatexFailed.into())
                     }
                 })
 
