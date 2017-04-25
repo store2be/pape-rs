@@ -171,9 +171,9 @@ impl Workspace {
                     let mut request = Request::new(Post, callback_url.0);
                     request.set_body(pdf_bytes);
 
-                    let client = Client::new(&handle);
-                    client.request(request);
-                    future::ok(())
+                    Client::new(&handle).request(request)
+                        .map(|_| ())
+                        .map_err(Error::from)
                 });
 
         Box::new(work)
