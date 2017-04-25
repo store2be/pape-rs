@@ -82,6 +82,8 @@ impl Workspace {
     }
 
     pub fn execute(self) -> Box<Future<Item=(), Error=Error>> {
+        debug!("Starting Workspace worker");
+
         let Workspace {
             handle,
             document_spec,
@@ -102,6 +104,7 @@ impl Workspace {
         // First download the template and populate it
         let work = http_client::download_file(&handle.clone(), template_url.0)
                 .and_then(|bytes| {
+                    debug!("Successfully downloaded template");
                     future::result(::std::string::String::from_utf8(bytes))
                         .map_err(Error::from)
                         .map(|template_string| (handle, template_string))
@@ -110,8 +113,10 @@ impl Workspace {
                         .map_err(Error::from)
                         .map(|latex_string| (handle, latex_string))
                 }).and_then(|(handle, latex_string)| {
-                    let mut file = ::std::fs::File::open(template_path.clone()).unwrap();
+                    debug!("Writing template to {:?}", template_path.clone());
+                    let mut file = ::std::fs::File::create(template_path.clone()).unwrap();
                     file.write_all(latex_string.as_bytes()).unwrap();
+                    debug!("Template successfully written to {:?}", template_path.clone());
                     future::ok((handle, template_path))
                 })
 
@@ -129,9 +134,10 @@ impl Workspace {
                         path.push(name);
 
                         http_client::download_file(&inner_handle, url)
-                            .map(move |bytes| ::std::fs::File::open(&path).unwrap().write_all(&bytes))
+                            .map(move |bytes| ::std::fs::File::create(&path).unwrap().write_all(&bytes))
                             .map_err(Error::from)
                     };
+                    debug!("Downloading assets {:?}", named);
                     future::join_all(named.map(download_named))
                         .map(|result| (handle, template_path, result))
                 })
@@ -139,8 +145,10 @@ impl Workspace {
         // Then run latex
                 .and_then(move |(handle, template_path, _)| {
                     let inner_handle = handle.clone();
+                    let temp_dir_path = template_path.parent().unwrap().to_str().unwrap();
                     Command::new("pdflatex")
-                        .arg(template_path.clone().to_str().unwrap())
+                        .arg(&format!("-output-directory={}", temp_dir_path))
+                        .arg(template_path.clone())
                         .status_async(&inner_handle)
                         .map(|exit_status| (exit_status, handle))
                         .map_err(Error::from)
@@ -161,6 +169,7 @@ impl Workspace {
 
         // Then get the bytes from the generated PDF path
                 .and_then(|(handle, pdf_path)| {
+                    debug!("Reading the pdf from {:?}", pdf_path);
                     let pdf_file = ::std::fs::File::open(pdf_path).unwrap();
                     let pdf_bytes: Vec<u8> = pdf_file.bytes().collect::<Result<Vec<u8>, _>>().unwrap();
                     future::ok((handle, pdf_bytes))
@@ -170,6 +179,9 @@ impl Workspace {
                 .and_then(move |(handle, pdf_bytes)| {
                     let mut request = Request::new(Post, callback_url.0);
                     request.set_body(pdf_bytes);
+
+                    // Avoid dir being dropped early
+                    let _dir = dir;
 
                     Client::new(&handle).request(request)
                         .map(|_| ())
