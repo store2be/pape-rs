@@ -81,7 +81,7 @@ impl Workspace {
         Box::new(work)
     }
 
-    pub fn execute(self) -> Box<Future<Item=Vec<u8>, Error=Error>> {
+    pub fn execute(self) -> Box<Future<Item=(), Error=Error>> {
         let Workspace {
             handle,
             document_spec,
@@ -170,7 +170,7 @@ impl Workspace {
                     let client = Client::new(&handle);
                     client.request(request);
                     future::ok(())
-                }).map(|_| Vec::new());
+                });
 
         Box::new(work)
     }
