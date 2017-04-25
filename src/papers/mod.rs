@@ -1,6 +1,6 @@
 mod document_spec;
 
-use futures::future::{BoxFuture, Future, ok, err, result};
+use futures::future::{Future, ok, err, result};
 use futures::Stream;
 use hyper;
 use hyper::{Get, Post, Head, StatusCode};
@@ -26,20 +26,64 @@ impl Papers {
         }
     }
 
-    fn submit(&self, req: Request) -> BoxFuture<Response, Error> {
+    fn submit(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
         let content_type = {
             req.headers().get::<ContentType>().map(|c| c.clone())
         };
 
-        // Return an error if the content type is not json/form-data
+        // Return an error if the content type is not application/json
         match content_type {
             Some(ContentType(Mime(TopLevel::Application, SubLevel::Json, _))) => (),
-            _ => return err(Error::UnprocessableEntity).boxed(),
+            _ => return Box::new(err(Error::UnprocessableEntity)),
+        };
+
+        let remote = self.remote.clone();
+        let handle = self.remote.handle().unwrap().clone();
+
+        let response = req.body()
+            // Ignore hyper errors (i.e. io error, invalid utf-8, etc.) for now
+            .map_err(|_| Error::UnprocessableEntity)
+            .fold(Vec::new(), |mut acc, chunk| {
+            // Receive all the body chunks into a vector
+            acc.extend_from_slice(&chunk);
+            ok::<_, Error>(acc)
+        })
+
+
+        // Parse the body into a DocumentSpec
+        .and_then(|body| {
+            result(
+                serde_json::from_slice::<DocumentSpec>(body.as_slice())
+                    .map_err(|_| Error::UnprocessableEntity)
+            )
+        })
+
+        // Handle the parsed request
+        .map_err(|_| Error::InternalServerError)
+        .and_then(|document_spec| {
+            result(Workspace::new(remote, document_spec))
+        }).and_then(move |workspace| {
+            handle.spawn(workspace.execute().map(|_| ()).map_err(|_| ()));
+            ok(Response::new().with_status(StatusCode::Ok))
+        }).map_err(|_| Error::InternalServerError);
+
+        Box::new(response)
+    }
+
+    fn preview(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
+        let content_type = {
+            req.headers().get::<ContentType>().map(|c| c.clone())
+        };
+
+        // Return an error if the content type is not application/json
+        match content_type {
+            Some(ContentType(Mime(TopLevel::Application, SubLevel::Json, _))) => (),
+            _ => return Box::new(err(Error::UnprocessableEntity)),
         };
 
         let remote = self.remote.clone();
 
-        req.body()
+        let response = req.body()
             // Ignore hyper errors (i.e. io error, invalid utf-8, etc.) for now
             .map_err(|_| Error::UnprocessableEntity)
             .fold(Vec::new(), |mut acc, chunk| {
@@ -59,21 +103,23 @@ impl Papers {
 
         // Handle the parsed request
         .and_then(|document_spec| {
-            ok(match Workspace::new(remote, document_spec) {
-                Ok(workspace) => {
-                    workspace.execute();
-                    Response::new().with_status(StatusCode::Ok)
-                },
-                Err(_) => {
-                    Response::new().with_status(StatusCode::InternalServerError)
-                },
-            })
-        }).boxed()
+            result(Workspace::new(remote, document_spec))
+                .map_err(|_| Error::InternalServerError)
+        })
+        .and_then(|workspace| {
+            workspace.preview()
+        }).and_then(|populated_template| {
+            ok(Response::new()
+                .with_status(StatusCode::Ok)
+                .with_body(populated_template))
+        });
+
+        Box::new(response)
+
     }
 
-    fn health_check(&self, _: Request) -> BoxFuture<Response, Error> {
-        let response = Response::new().with_status(StatusCode::Ok);
-        ok(response).boxed()
+    fn health_check(&self, _: Request) -> Box<Future<Item=Response, Error=Error>> {
+        ok(Response::new().with_status(StatusCode::Ok)).boxed()
     }
 }
 
@@ -85,7 +131,7 @@ impl Service for Papers {
 
     fn call(&self, req: Self::Request) -> Self::Future {
         // debug!("called with uri {:?}, and method {:?}", req.path(), req.method());
-        match (req.method(), req.path()) {
+        let response = match (req.method(), req.path()) {
             (&Get, "/healthz") => self.health_check(req),
             (&Head, "/healthz") => self.health_check(req),
             (&Post, "/submit") => self.submit(req),
@@ -95,7 +141,9 @@ impl Service for Papers {
                 Ok(response) => ok(response),
                 Err(err) => ok(err.into_response()),
             }
-        }).boxed()
+        });
+
+        Box::new(response)
     }
 }
 
