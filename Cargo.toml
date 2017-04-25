@@ -10,6 +10,7 @@ authors = [
 [dependencies]
 futures = "*"
 mktemp = "*"
+mime = "*"
 hyper = { git = "https://github.com/hyperium/hyper" }
 serde = "1.0"
 serde_derive = "1.0"

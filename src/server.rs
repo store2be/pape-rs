@@ -1,7 +1,7 @@
 use papers::Papers;
 
 use futures::future;
-use futures::Stream;
+use futures::{Future, Stream};
 use hyper::server::Http;
 use tokio_service::NewService;
 use tokio_core;
@@ -34,6 +34,6 @@ impl Server {
             Http::new().bind_connection(&handle, tcp_stream, socket_addr, papers_service.new_service().unwrap());
             future::ok(())
         });
-        core.run(work).unwrap()
+        core.run(future::ok(println!("Server started")).and_then(|_| work)).unwrap()
     }
 }
