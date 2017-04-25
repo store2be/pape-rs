@@ -3,54 +3,50 @@ use hyper::server::Response;
 use hyper::{StatusCode};
 use tera;
 
-pub enum Error {
-    Hyper(hyper::Error),
-    Tera(tera::Error),
-    InternalServerError,
-    UriError(hyper::error::UriError),
-    UnprocessableEntity,
-    LatexFailed,
+error_chain! {
+    types {
+        Error, ErrorKind, ResultExt, Result;
+    }
+
+    links {
+    }
+
+
+    foreign_links {
+        Hyper(hyper::Error);
+        Io(::std::io::Error);
+        Tera(tera::Error);
+        UriError(hyper::error::UriError);
+        FromUtf8Error(::std::string::FromUtf8Error);
+    }
+
+    errors {
+        LatexFailed {
+            description("The latex command failed")
+            display("The latex command failed")
+        }
+        InternalServerError {
+            description("Internal server error")
+            display("Internal server error")
+        }
+        UnprocessableEntity {
+            description("Unprocessable entity")
+            display("Unprocessable entity")
+        }
+    }
 }
 
 impl Error {
     pub fn into_response(self) -> Response {
         match self {
-            Error::UnprocessableEntity => Response::new().with_status(StatusCode::UnprocessableEntity),
-            Error::InternalServerError => Response::new().with_status(StatusCode::InternalServerError),
-            Error::Tera(_) | Error::UriError(_) | Error::Hyper(_) => {
+            Error(ErrorKind::UnprocessableEntity, _) => Response::new().with_status(StatusCode::UnprocessableEntity),
+            Error(ErrorKind::InternalServerError, _) => Response::new().with_status(StatusCode::InternalServerError),
+            Error(ErrorKind::Tera(_), _)
+            | Error(ErrorKind::UriError(_), _)
+            | Error(ErrorKind::Hyper(_), _) => {
                 Response::new().with_status(StatusCode::InternalServerError)
             },
             _ => unreachable!(),
         }
-    }
-}
-
-impl From<hyper::Error> for Error {
-    fn from(err: hyper::Error) -> Error {
-        Error::Hyper(err)
-    }
-}
-
-impl From<hyper::error::UriError> for Error {
-    fn from(err: hyper::error::UriError) -> Error {
-        Error::UriError(err)
-    }
-}
-
-impl From<::std::string::FromUtf8Error> for Error {
-    fn from(_: ::std::string::FromUtf8Error) -> Error {
-        Error::UnprocessableEntity
-    }
-}
-
-impl From<tera::Error> for Error {
-    fn from(err: tera::Error) -> Error {
-        Error::Tera(err)
-    }
-}
-
-impl From<::std::io::Error> for Error {
-    fn from(_: ::std::io::Error) -> Error {
-        Error::UnprocessableEntity
     }
 }

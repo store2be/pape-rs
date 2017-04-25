@@ -78,7 +78,10 @@ fn test_end_to_end() {
     let document_spec = r#"{
         "assets_urls": ["http://127.0.0.1:8733/assets/logo.png", "http://127.0.0.1/8733/dead-end/"],
         "template_url": "http://127.0.0.1:8733/template",
-        "callback_url": "http://127.0.0.1:8733/callback"
+        "callback_url": "http://127.0.0.1:8733/callback",
+        "variables": {
+            "who": "me"
+        }
     }"#;
 
     let request: Request<hyper::Body> = {
@@ -107,7 +110,7 @@ fn test_end_to_end() {
     ].into_iter().map(Ok).collect();
 
     let expectations = receiver
-        .take(1)
+        .take(2)
         .zip(futures::stream::iter(expected_requests))
         .for_each(|(request, schema)| {
             assert_eq!(request.path(), schema.0);
