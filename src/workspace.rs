@@ -37,8 +37,9 @@ fn extract_file_name_from_uri(uri: &Uri) -> Option<String> {
     }
 }
 
-/// Since mktemp::Temp implements Drop by deleting the directory, we don't need to worry about
-/// leaving files or directories behind.
+/// Since `mktemp::Temp` implements Drop by deleting the directory, we don't need to worry about
+/// leaving files or directories behind. On the flipside, we must ensure it is not dropped before
+/// the last returned future that needs the directory finishes.
 impl Workspace {
 
     pub fn new(remote: Remote, document_spec: DocumentSpec) -> Result<Workspace, Error> {
@@ -57,15 +58,13 @@ impl Workspace {
         let Workspace {
             handle,
             document_spec,
-            template_path: _,
-            dir: _,
+            ..
         } = self;
 
         let DocumentSpec {
-            assets_urls: _,
-            callback_url: _,
             template_url,
             variables,
+            ..
         } = document_spec;
 
         // Download the template and populate it

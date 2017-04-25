@@ -27,9 +27,7 @@ impl Papers {
     }
 
     fn submit(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
-        let content_type = {
-            req.headers().get::<ContentType>().map(|c| c.clone())
-        };
+        let content_type = req.headers().get::<ContentType>().cloned();
 
         // Return an error if the content type is not application/json
         match content_type {
@@ -72,7 +70,7 @@ impl Papers {
 
     fn preview(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
         let content_type = {
-            req.headers().get::<ContentType>().map(|c| c.clone())
+            req.headers().get::<ContentType>().cloned()
         };
 
         // Return an error if the content type is not application/json
@@ -132,8 +130,7 @@ impl Service for Papers {
     fn call(&self, req: Self::Request) -> Self::Future {
         debug!("called with uri {:?}, and method {:?}", req.path(), req.method());
         let response = match (req.method(), req.path()) {
-            (&Get, "/healthz") => self.health_check(req),
-            (&Head, "/healthz") => self.health_check(req),
+            (&Get, "/healthz") | (&Head, "/healthz") => self.health_check(req),
             (&Post, "/preview") => self.preview(req),
             (&Post, "/submit") => self.submit(req),
             _ => ok(Response::new().with_status(StatusCode::NotFound)).boxed(),

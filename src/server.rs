@@ -37,3 +37,11 @@ impl Server {
         core.run(future::ok(println!("Server started")).and_then(|_| work)).unwrap()
     }
 }
+
+impl ::std::default::Default for Server {
+    fn default() -> Server {
+        Server {
+            port: 8080,
+        }
+    }
+}
