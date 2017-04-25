@@ -1,14 +1,14 @@
 mod document_spec;
 
-use futures::future::{BoxFuture, Future, ok, err, result, FutureResult};
+use futures::future::{BoxFuture, Future, ok, err, result};
 use futures::Stream;
 use hyper;
-use hyper::{Get, Post, StatusCode};
+use hyper::{Get, Post, Head, StatusCode};
 use hyper::header::ContentType;
-use hyper::mime::{Mime, TopLevel, SubLevel, Attr, Value};
+use hyper::mime::{Mime, TopLevel, SubLevel};
 use hyper::server::{Request, Response};
 use serde_json;
-use tokio_service::Service;
+use tokio_service::{NewService, Service};
 use tokio_core::reactor::Remote;
 
 use error::Error;
@@ -53,7 +53,7 @@ impl Papers {
         .and_then(|body| {
             result(
                 serde_json::from_slice::<DocumentSpec>(body.as_slice())
-                    .map_err(|err| Error::UnprocessableEntity)
+                    .map_err(|_| Error::UnprocessableEntity)
             )
         })
 
@@ -84,8 +84,10 @@ impl Service for Papers {
     type Future = Box<Future<Item=Response, Error=hyper::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
+        // debug!("called with uri {:?}, and method {:?}", req.path(), req.method());
         match (req.method(), req.path()) {
             (&Get, "/healthz") => self.health_check(req),
+            (&Head, "/healthz") => self.health_check(req),
             (&Post, "/submit") => self.submit(req),
             _ => ok(Response::new().with_status(StatusCode::NotFound)).boxed(),
         }.then(|handler_result| {
@@ -94,5 +96,18 @@ impl Service for Papers {
                 Err(err) => ok(err.into_response()),
             }
         }).boxed()
+    }
+}
+
+impl NewService for Papers {
+    type Request = Request;
+    type Response = Response;
+    type Error = hyper::Error;
+    type Instance = Papers;
+
+    fn new_service(&self) -> Result<Self::Instance, ::std::io::Error> {
+        Ok(Papers {
+            remote: self.remote.clone(),
+        })
     }
 }

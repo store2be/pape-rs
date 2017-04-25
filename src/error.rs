@@ -36,7 +36,7 @@ impl From<hyper::error::UriError> for Error {
 }
 
 impl From<::std::string::FromUtf8Error> for Error {
-    fn from(err: ::std::string::FromUtf8Error) -> Error {
+    fn from(_: ::std::string::FromUtf8Error) -> Error {
         Error::UnprocessableEntity
     }
 }
@@ -48,7 +48,7 @@ impl From<tera::Error> for Error {
 }
 
 impl From<::std::io::Error> for Error {
-    fn from(err: ::std::io::Error) -> Error {
+    fn from(_: ::std::io::Error) -> Error {
         Error::UnprocessableEntity
     }
 }
