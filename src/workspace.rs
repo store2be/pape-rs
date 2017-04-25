@@ -42,7 +42,7 @@ impl Workspace {
     pub fn new(remote: Remote, document_spec: DocumentSpec) -> Result<Workspace, Error> {
         let dir = Temp::new_dir()?;
         let mut template_path = dir.to_path_buf();
-        template_path.push(Path::new("template.tex"));
+        template_path.push(Path::new("out.tex"));
         Ok(Workspace {
             document_spec,
             handle: remote.handle().unwrap(),
@@ -94,6 +94,9 @@ impl Workspace {
             variables,
         } = document_spec;
 
+        let out_tex_path = dir.to_path_buf();
+        let out_pdf_path = dir.to_path_buf();
+
         // First download the template and populate it
         let work = http_client::download_file(&handle.clone(), template_url.0)
                 .and_then(|bytes| {
@@ -120,7 +123,7 @@ impl Workspace {
                     let inner_handle = handle.clone();
 
                     let download_named = move |(name, url)| {
-                        let mut path = dir.to_path_buf();
+                        let mut path = out_tex_path.clone();
                         path.push(name);
 
                         http_client::download_file(&inner_handle, url)
@@ -143,6 +146,13 @@ impl Workspace {
                     } else {
                         future::err(Error::LatexFailed)
                     }
+                })
+
+        // Then construct the path to the generated PDF
+                .and_then(|_| {
+                    let mut path = out_pdf_path;
+                    path.push(Path::new("out.pdf"));
+                    future::ok(())
                 }).map(|_| Vec::new());
 
         Box::new(work)
