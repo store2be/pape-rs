@@ -134,6 +134,7 @@ impl Service for Papers {
         let response = match (req.method(), req.path()) {
             (&Get, "/healthz") => self.health_check(req),
             (&Head, "/healthz") => self.health_check(req),
+            (&Post, "/preview") => self.preview(req),
             (&Post, "/submit") => self.submit(req),
             _ => ok(Response::new().with_status(StatusCode::NotFound)).boxed(),
         }.then(|handler_result| {
