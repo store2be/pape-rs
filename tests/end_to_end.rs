@@ -2,6 +2,8 @@ extern crate futures;
 #[macro_use]
 extern crate mime;
 extern crate hyper;
+extern crate slog;
+extern crate slog_envlogger;
 extern crate tokio_core;
 extern crate tokio_service;
 extern crate pape;
@@ -54,6 +56,7 @@ impl Service for MockServer {
 
 #[test]
 fn test_end_to_end() {
+    let _logger = slog_envlogger::init().unwrap();
     let (sender, receiver) = mpsc::channel(30);
 
     std::thread::spawn(|| {
@@ -80,7 +83,7 @@ fn test_end_to_end() {
         "template_url": "http://127.0.0.1:8733/template",
         "callback_url": "http://127.0.0.1:8733/callback",
         "variables": {
-            "who": "me"
+            "who": "peter"
         }
     }"#;
 
@@ -110,7 +113,7 @@ fn test_end_to_end() {
     ].into_iter().map(Ok).collect();
 
     let expectations = receiver
-        .take(2)
+        .take(expected_requests.len() as u64)
         .zip(futures::stream::iter(expected_requests))
         .for_each(|(request, schema)| {
             assert_eq!(request.path(), schema.0);
