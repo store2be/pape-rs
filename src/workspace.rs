@@ -46,10 +46,10 @@ impl Workspace {
         let mut template_path = dir.to_path_buf();
         template_path.push(Path::new("out.tex"));
         Ok(Workspace {
-            document_spec,
+            document_spec: document_spec,
             handle: remote.handle().unwrap(),
-            template_path,
-            dir,
+            template_path: template_path,
+            dir: dir,
         })
     }
 
@@ -146,7 +146,7 @@ impl Workspace {
                 .and_then(move |(handle, template_path, _)| {
                     let inner_handle = handle.clone();
                     let temp_dir_path = template_path.parent().unwrap().to_str().unwrap();
-                    Command::new("pdflatex")
+                    Command::new("xelatex")
                         .arg(&format!("-output-directory={}", temp_dir_path))
                         .arg(template_path.clone())
                         .status_async(&inner_handle)

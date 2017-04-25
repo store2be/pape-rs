@@ -4,7 +4,7 @@ extern crate mime;
 extern crate hyper;
 extern crate tokio_core;
 extern crate tokio_service;
-extern crate pape;
+extern crate papers;
 extern crate serde_json as json;
 
 use futures::future;
@@ -46,7 +46,7 @@ impl Service for MockServer {
 #[test]
 fn test_simple_template_preview() {
     std::thread::spawn(|| {
-        pape::server::Server::new().with_port(8019).start();
+        papers::server::Server::new().with_port(8019).start();
     });
 
     std::thread::spawn(|| {
