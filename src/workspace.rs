@@ -1,6 +1,8 @@
 use futures::future;
 use futures::Future;
 use hyper::Uri;
+use hyper::client::{Client, Request};
+use hyper::Method::Post;
 use mktemp::Temp;
 use std::io::prelude::*;
 use std::path::Path;
@@ -89,7 +91,7 @@ impl Workspace {
 
         let DocumentSpec {
             assets_urls,
-            callback_url: _,
+            callback_url,
             template_url,
             variables,
         } = document_spec;
@@ -135,23 +137,38 @@ impl Workspace {
                 })
 
         // Then run latex
-                .and_then(|(handle, template_path, _)| {
+                .and_then(move |(handle, template_path, _)| {
+                    let inner_handle = handle.clone();
                     Command::new("pdflatex")
                         .arg(template_path.clone().to_str().unwrap())
-                        .status_async(&handle.clone())
+                        .status_async(&inner_handle)
+                        .map(|exit_status| (exit_status, handle))
                         .map_err(Error::from)
-                }).and_then(|exit_status| {
+                }).and_then(|(exit_status, handle)| {
                     if exit_status.success() {
-                        future::ok(())
+                        future::ok(handle)
                     } else {
                         future::err(Error::LatexFailed)
                     }
                 })
 
         // Then construct the path to the generated PDF
-                .and_then(|_| {
+                .and_then(move |handle| {
                     let mut path = out_pdf_path;
                     path.push(Path::new("out.pdf"));
+                    future::ok((handle, path))
+                })
+
+        // Finally, post it to the callback URL
+                .and_then(move |(handle, pdf_path)| {
+                    let pdf_file = ::std::fs::File::open(pdf_path).unwrap();
+                    let pdf_bytes: Vec<u8> = pdf_file.bytes().collect::<Result<Vec<u8>, _>>().unwrap();
+
+                    let mut request = Request::new(Post, callback_url.0);
+                    request.set_body(pdf_bytes);
+
+                    let client = Client::new(&handle);
+                    client.request(request);
                     future::ok(())
                 }).map(|_| Vec::new());
 
