@@ -8,6 +8,7 @@ use hyper::header::ContentType;
 use hyper::mime::{Mime, TopLevel, SubLevel};
 use hyper::server::{Request, Response};
 use serde_json;
+use slog;
 use tokio_service::{NewService, Service};
 use tokio_core::reactor::Remote;
 
@@ -17,12 +18,14 @@ use workspace::Workspace;
 
 pub struct Papers {
     remote: Remote,
+    logger: slog::Logger,
 }
 
 impl Papers {
-    pub fn new(remote: Remote) -> Papers {
+    pub fn new(remote: Remote, logger: slog::Logger) -> Papers {
         Papers {
             remote: remote,
+            logger: logger,
         }
     }
 
@@ -154,6 +157,7 @@ impl NewService for Papers {
     fn new_service(&self) -> Result<Self::Instance, ::std::io::Error> {
         Ok(Papers {
             remote: self.remote.clone(),
+            logger: self.logger.clone(),
         })
     }
 }
