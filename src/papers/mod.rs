@@ -48,6 +48,7 @@ impl Papers {
 
         let remote = self.remote.clone();
         let handle = self.remote.handle().unwrap().clone();
+        let logger = self.logger.clone();
 
         let response = req.body()
             // Ignore hyper errors (i.e. io error, invalid utf-8, etc.) for now
@@ -69,7 +70,7 @@ impl Papers {
         // Handle the parsed request
         .map_err(|_| ErrorKind::InternalServerError.into())
         .and_then(|document_spec| {
-            result(Workspace::new(remote, document_spec))
+            result(Workspace::new(remote, document_spec, logger))
         }).and_then(move |workspace| {
             handle.spawn(workspace.execute().map(|_| ()).map_err(|err| panic!("{}", err)));
             ok(Response::new().with_status(StatusCode::Ok))
@@ -97,6 +98,7 @@ impl Papers {
         };
 
         let remote = self.remote.clone();
+        let logger = self.logger.clone();
 
         let response = req.body()
             // Ignore hyper errors (i.e. io error, invalid utf-8, etc.) for now
@@ -118,7 +120,7 @@ impl Papers {
 
         // Handle the parsed request
         .and_then(|document_spec| {
-            result(Workspace::new(remote, document_spec))
+            result(Workspace::new(remote, document_spec, logger))
                 .map_err(|err| Error::with_chain(err, ErrorKind::InternalServerError))
         })
         .and_then(|workspace| {
@@ -136,7 +138,7 @@ impl Papers {
     fn health_check(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
         info!(
             self.logger,
-            "Received a health request check ({}) from {:?}",
+            "Received a health check request ({}) from {:?}",
             req.method(),
             req.remote_addr().unwrap(),
         );

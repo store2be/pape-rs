@@ -4,6 +4,7 @@ use hyper::Uri;
 use hyper::client::{Client, Request};
 use hyper::Method::Post;
 use mktemp::Temp;
+use slog;
 use std::io::prelude::*;
 use std::path::Path;
 use std::process::Command;
@@ -20,6 +21,7 @@ pub struct Workspace {
     document_spec: DocumentSpec,
     handle: Handle,
     template_path: ::std::path::PathBuf,
+    logger: slog::Logger,
 }
 
 /// We ignore file names that end with a slash for now, and always determine the file name from the Uri
@@ -42,7 +44,7 @@ fn extract_file_name_from_uri(uri: &Uri) -> Option<String> {
 /// the last returned future that needs the directory finishes.
 impl Workspace {
 
-    pub fn new(remote: Remote, document_spec: DocumentSpec) -> Result<Workspace, Error> {
+    pub fn new(remote: Remote, document_spec: DocumentSpec, logger: slog::Logger) -> Result<Workspace, Error> {
         let dir = Temp::new_dir()?;
         let mut template_path = dir.to_path_buf();
         template_path.push(Path::new("out.tex"));
@@ -51,6 +53,7 @@ impl Workspace {
             handle: remote.handle().unwrap(),
             template_path: template_path,
             dir: dir,
+            logger: logger,
         })
     }
 
@@ -88,6 +91,7 @@ impl Workspace {
             document_spec,
             template_path,
             dir,
+            logger,
         } = self;
 
         let DocumentSpec {
