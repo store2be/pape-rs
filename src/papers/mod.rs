@@ -30,6 +30,14 @@ impl Papers {
     }
 
     fn submit(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
+        info!(
+            self.logger,
+            "Received a submit request ({}) from {:?}",
+            req.method(),
+            req.remote_addr().unwrap(),
+        );
+        debug!(self.logger, "Full request: {:#?}", req);
+
         let content_type = req.headers().get::<ContentType>().cloned();
 
         // Return an error if the content type is not application/json
@@ -49,7 +57,6 @@ impl Papers {
             acc.extend_from_slice(&chunk);
             ok::<_, Error>(acc)
         })
-
 
         // Parse the body into a DocumentSpec
         .and_then(|body| {
@@ -72,6 +79,13 @@ impl Papers {
     }
 
     fn preview(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
+        info!(
+            self.logger,
+            "Received a preview request ({}) from: {:?}",
+            req.method(),
+            req.remote_addr().unwrap(),
+        );
+        debug!(self.logger, "Full request: {:#?}", req);
         let content_type = {
             req.headers().get::<ContentType>().cloned()
         };
@@ -119,7 +133,13 @@ impl Papers {
 
     }
 
-    fn health_check(&self, _: Request) -> Box<Future<Item=Response, Error=Error>> {
+    fn health_check(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
+        info!(
+            self.logger,
+            "Received a health request check ({}) from {:?}",
+            req.method(),
+            req.remote_addr().unwrap(),
+        );
         ok(Response::new().with_status(StatusCode::Ok)).boxed()
     }
 }
@@ -136,7 +156,15 @@ impl Service for Papers {
             (&Get, "/healthz") | (&Head, "/healthz") => self.health_check(req),
             (&Post, "/preview") => self.preview(req),
             (&Post, "/submit") => self.submit(req),
-            _ => ok(Response::new().with_status(StatusCode::NotFound)).boxed(),
+            _ => {
+                info!(
+                    self.logger,
+                    "Received a request to a non-existing endpoint \"{}\" from {:?}",
+                    req.path(),
+                    req.remote_addr().unwrap(),
+                );
+                ok(Response::new().with_status(StatusCode::NotFound)).boxed()
+            }
         }.then(|handler_result| {
             match handler_result {
                 Ok(response) => ok(response),
