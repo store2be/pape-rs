@@ -3,7 +3,6 @@ extern crate futures;
 extern crate mime;
 extern crate hyper;
 extern crate slog;
-extern crate slog_envlogger;
 extern crate tokio_core;
 extern crate tokio_service;
 extern crate papers;
@@ -56,7 +55,6 @@ impl Service for MockServer {
 
 #[test]
 fn test_end_to_end() {
-    let _logger = slog_envlogger::init().unwrap();
     let (sender, receiver) = mpsc::channel(30);
 
     std::thread::spawn(|| {

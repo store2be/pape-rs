@@ -128,7 +128,7 @@ impl Service for Papers {
     type Future = Box<Future<Item=Response, Error=hyper::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
-        debug!("called with uri {:?}, and method {:?}", req.path(), req.method());
+        // debug!("called with uri {:?}, and method {:?}", req.path(), req.method());
         let response = match (req.method(), req.path()) {
             (&Get, "/healthz") | (&Head, "/healthz") => self.health_check(req),
             (&Post, "/preview") => self.preview(req),
