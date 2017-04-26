@@ -30,3 +30,8 @@ tokio-service = "*"
 name = "papers-server"
 path = "./src/main.rs"
 test = false
+
+[[bin]]
+name = "papers-local"
+path = "./src/local_server.rs"
+test = false

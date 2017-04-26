@@ -1,13 +1,13 @@
 use hyper::Uri;
 use std::collections::HashMap;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct PapersUri(#[serde(with = "uri_deserializer")] pub Uri);
 
 /// See https://serde.rs/custom-date-format.html for the custom deserialization.
 /// An alternative design would be making a newtype containing an Uri and implementing Deserialize
 /// for that.
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct DocumentSpec {
     #[serde(default = "default_assets")]
     pub assets_urls: Vec<PapersUri>,
@@ -19,7 +19,13 @@ pub struct DocumentSpec {
 
 mod uri_deserializer {
     use hyper::Uri;
-    use serde::{self, Deserialize, Deserializer};
+    use serde::{self, Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S>(uri: &Uri, serializer: S) -> Result<S::Ok, S::Error>
+        where S: Serializer
+    {
+        serializer.serialize_str(&format!("{}", uri))
+    }
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Uri, D::Error>
         where D: Deserializer<'de> {
