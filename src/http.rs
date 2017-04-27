@@ -1,14 +1,44 @@
 use error::*;
 use futures::future;
 use futures::{Future, Stream};
+use mime;
 use hyper;
 use std::path::PathBuf;
+use hyper::server;
 use hyper::header::{Header, ContentType};
 use hyper::client::{Client, Request, Response};
 use multipart::client::lazy;
 use hyper::header::{Location};
 use hyper::{Uri, StatusCode};
 use std::io::prelude::*;
+
+pub trait ServerRequestExt {
+    fn get_body_bytes(self) -> Box<Future<Item=Vec<u8>, Error=Error>>;
+    fn has_content_type(&self, mime: mime::Mime) -> bool;
+}
+
+impl ServerRequestExt for server::Request {
+    fn get_body_bytes(self) -> Box<Future<Item=Vec<u8>, Error=Error>> {
+        Box::new(self.body().map_err(Error::from).fold(Vec::new(), |mut acc, chunk| {
+            acc.extend_from_slice(&chunk);
+            future::ok::<_, Error>(acc)
+        }))
+    }
+
+    fn has_content_type(&self, mime: mime::Mime) -> bool {
+        use mime::Mime;
+
+        let content_type = self.headers().get::<ContentType>().cloned();
+        let Mime(top_level, sub_level, _) = mime;
+
+        if let Some(ContentType(Mime(found_top_level, found_sub_level, _))) = content_type {
+            found_top_level == top_level && found_sub_level == sub_level
+        } else {
+            false
+        }
+
+    }
+}
 
 pub trait ResponseExt {
     fn get_body_bytes(self) -> Box<Future<Item=Vec<u8>, Error=Error>>;
@@ -85,12 +115,30 @@ fn determine_get_result(res: Response) -> Result<GetResult> {
     }
 }
 
-pub fn multipart_request_with_file(request: Request, path: PathBuf) -> Result<Request> {
-    let mut fields = lazy::Multipart::new().add_file("file", path).prepare().unwrap();
+pub fn multipart_request_with_file(request: Request, path: PathBuf) -> ::std::result::Result<Request, Error> {
+    let mut fields = lazy::Multipart::new()
+        .add_file("file", path)
+        .prepare()
+        .map_err(|_| "Failed to prepare multipart body")?;
     let mut bytes: Vec<u8> = Vec::new();
     fields.read_to_end(&mut bytes)?;
-    let req = request
+    Ok(
+        request
         .with_body(bytes)
-        .with_header(ContentType(mime!(Multipart/FormData; Boundary=(fields.boundary()))));
-    Ok(req)
+        .with_header(ContentType(mime!(Multipart/FormData; Boundary=(fields.boundary()))))
+    )
+}
+
+pub fn multipart_request_with_error(request: Request, error: Error) -> Result<Request> {
+    let mut fields = lazy::Multipart::new()
+        .add_text("error", format!("{}", error))
+        .prepare()
+        .map_err(|_| "Failed to prepare multipart body")?;
+    let mut bytes: Vec<u8> = Vec::new();
+    fields.read_to_end(&mut bytes)?;
+    Ok(
+        request
+        .with_body(bytes)
+        .with_header(ContentType(mime!(Multipart/FormData; Boundary=(fields.boundary()))))
+    )
 }

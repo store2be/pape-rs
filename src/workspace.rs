@@ -88,7 +88,7 @@ impl Workspace {
         Box::new(work)
     }
 
-    pub fn execute(self) -> Box<Future<Item=(), Error=Error>> {
+    pub fn execute(self) -> Box<Future<Item=(), Error=()>> {
         let Workspace {
             handle,
             document_spec,
@@ -113,6 +113,9 @@ impl Workspace {
             handle: handle,
             logger: logger,
         };
+
+        let error_path_handle = context.handle.clone();
+        let error_path_callback_url = callback_url.0.clone();
 
         // First download the template and populate it
         let work = Client::new(&context.handle.clone())
@@ -202,9 +205,15 @@ impl Workspace {
                     Client::new(&context.handle).request(request)
                         .map(|_| ())
                         .map_err(Error::from)
+        // Report errors to the callback url
+                }).or_else(move |error| {
+                    let req = Request::new(hyper::Method::Post, error_path_callback_url);
+                    Client::new(&error_path_handle)
+                        .request(multipart_request_with_error(req, error).unwrap())
+                        .map(|_| ())
                 });
 
-        Box::new(work)
+        Box::new(work.map_err(|_| ()))
     }
 }
 
