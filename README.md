@@ -2,6 +2,8 @@
 
 # Papers
 
+![Papers Logo](logo.png)
+
 A Latex template to PDF generation web service written in Rust.
 
 ## Explanation of the environment variables
