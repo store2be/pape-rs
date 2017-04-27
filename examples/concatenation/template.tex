@@ -1,0 +1,11 @@
+\documentclass[a4paper]{article}
+
+\usepackage{pdfpages}
+
+\begin{document}
+
+{% for filename in concat_pdfs %}
+    \includepdf[pages={-}]{% raw %}{{% endraw %}{{filename}}{% raw %}}{% endraw %}
+{% endfor %}
+
+\end{document}
