@@ -76,7 +76,9 @@ impl Workspace {
         } = document_spec;
 
         // Download the template and populate it
-        let work = Client::new(&handle.clone())
+        let work = Client::configure()
+            .connector(https_connector(&handle.clone()))
+            .build(&handle.clone())
             .get_follow_redirect(template_url.0)
             .and_then(|res| res.get_body_bytes())
             .and_then(|bytes| {
@@ -118,7 +120,9 @@ impl Workspace {
         let error_path_callback_url = callback_url.0.clone();
 
         // First download the template and populate it
-        let work = Client::new(&context.handle.clone())
+        let work = Client::configure()
+            .connector(https_connector(&handle.clone()))
+            .build(&handle.clone())
             .get_follow_redirect(template_url.0)
             .and_then(|res| res.get_body_bytes())
             .and_then(|bytes| {
@@ -151,7 +155,9 @@ impl Workspace {
                         let mut path = out_tex_path.clone();
                         path.push(name);
 
-                        Client::new(&inner_handle)
+                        Client::configure()
+                            .connector(https_connector(&handle.clone()))
+                            .build(&handle.clone())
                             .get_follow_redirect(url)
                             .and_then(|res| res.get_body_bytes())
                             .map(move |bytes| ::std::fs::File::create(&path).unwrap().write_all(&bytes))
@@ -202,7 +208,10 @@ impl Workspace {
                     // Avoid dir being dropped early
                     let _dir = dir;
 
-                    Client::new(&context.handle).request(request)
+                    Client::configure()
+                        .connector(https_connector(&handle.clone()))
+                        .build(&handle.clone())
+                        .request(request)
                         .map(|_| ())
                         .map_err(Error::from)
         // Report errors to the callback url

@@ -12,6 +12,13 @@ use multipart::client::lazy;
 use hyper::header::{Location};
 use hyper::{Uri, StatusCode};
 use std::io::prelude::*;
+use tokio_core::reactor::Handle;
+
+pub fn https_connector(handle: &Handle) -> hyper::client::HttpConnector {
+    let mut connector = hyper::client::HttpConnector::new(4, handle);
+    connector.enforce_http(false);
+    connector
+}
 
 pub trait ServerRequestExt {
     fn get_body_bytes(self) -> Box<Future<Item=Vec<u8>, Error=Error>>;
