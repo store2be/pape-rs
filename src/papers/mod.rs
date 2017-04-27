@@ -1,17 +1,15 @@
 mod document_spec;
 
 use futures::future::{Future, ok, err, result};
-use futures::Stream;
 use hyper;
 use hyper::{Get, Post, Head, StatusCode};
-use hyper::header::ContentType;
-use hyper::mime::{Mime, TopLevel, SubLevel};
 use hyper::server::{Request, Response};
 use serde_json;
 use slog;
 use tokio_service::{NewService, Service};
 use tokio_core::reactor::Remote;
 
+use http::*;
 use error::{Error, ErrorKind};
 pub use self::document_spec::{DocumentSpec, PapersUri};
 use workspace::Workspace;
@@ -38,26 +36,15 @@ impl Papers {
         );
         debug!(self.logger, "Full request: {:#?}", req);
 
-        let content_type = req.headers().get::<ContentType>().cloned();
-
-        // Return an error if the content type is not application/json
-        match content_type {
-            Some(ContentType(Mime(TopLevel::Application, SubLevel::Json, _))) => (),
-            _ => return Box::new(err(ErrorKind::UnprocessableEntity.into())),
-        };
+        if !req.has_content_type(mime!(Application/Json)) {
+            return Box::new(err(ErrorKind::UnprocessableEntity.into()));
+        }
 
         let remote = self.remote.clone();
         let handle = self.remote.handle().unwrap().clone();
         let logger = self.logger.clone();
 
-        let response = req.body()
-            // Ignore hyper errors (i.e. io error, invalid utf-8, etc.) for now
-            .map_err(|_| ErrorKind::UnprocessableEntity.into())
-            .fold(Vec::new(), |mut acc, chunk| {
-            // Receive all the body chunks into a vector
-            acc.extend_from_slice(&chunk);
-            ok::<_, Error>(acc)
-        })
+        let response = req.get_body_bytes()
 
         // Parse the body into a DocumentSpec
         .and_then(|body| {
@@ -72,7 +59,7 @@ impl Papers {
         .and_then(|document_spec| {
             result(Workspace::new(remote, document_spec, logger))
         }).and_then(move |workspace| {
-            handle.spawn(workspace.execute().map(|_| ()).map_err(|err| panic!("{}", err)));
+            handle.spawn(workspace.execute());
             ok(Response::new().with_status(StatusCode::Ok))
         }).map_err(|_| ErrorKind::InternalServerError.into());
 
@@ -87,28 +74,15 @@ impl Papers {
             req.remote_addr().unwrap(),
         );
         debug!(self.logger, "Full request: {:#?}", req);
-        let content_type = {
-            req.headers().get::<ContentType>().cloned()
-        };
 
-        // Return an error if the content type is not application/json
-        match content_type {
-            Some(ContentType(Mime(TopLevel::Application, SubLevel::Json, _))) => (),
-            _ => return Box::new(err(ErrorKind::UnprocessableEntity.into())),
-        };
+        if !req.has_content_type(mime!(Application/Json)) {
+            return Box::new(err(ErrorKind::UnprocessableEntity.into()));
+        }
 
         let remote = self.remote.clone();
         let logger = self.logger.clone();
 
-        let response = req.body()
-            // Ignore hyper errors (i.e. io error, invalid utf-8, etc.) for now
-            .map_err(|err| Error::with_chain(err, ErrorKind::UnprocessableEntity))
-            .fold(Vec::new(), |mut acc, chunk| {
-            // Receive all the body chunks into a vector
-            acc.extend_from_slice(&chunk);
-            ok::<_, Error>(acc)
-        })
-
+        let response = req.get_body_bytes()
 
         // Parse the body into a DocumentSpec
         .and_then(|body| {
@@ -142,7 +116,7 @@ impl Papers {
             req.method(),
             req.remote_addr().unwrap(),
         );
-        ok(Response::new().with_status(StatusCode::Ok)).boxed()
+        Box::new(ok(Response::new().with_status(StatusCode::Ok)))
     }
 }
 
@@ -165,7 +139,7 @@ impl Service for Papers {
                     req.path(),
                     req.remote_addr().unwrap(),
                 );
-                ok(Response::new().with_status(StatusCode::NotFound)).boxed()
+                Box::new(ok(Response::new().with_status(StatusCode::NotFound)))
             }
         }.then(|handler_result| {
             match handler_result {

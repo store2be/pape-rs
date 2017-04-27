@@ -1,8 +1,8 @@
 use futures::future;
 use futures::Future;
+use hyper;
 use hyper::Uri;
 use hyper::client::{Client, Request};
-use hyper::Method::Post;
 use mktemp::Temp;
 use slog;
 use std::io::prelude::*;
@@ -12,7 +12,7 @@ use tokio_core::reactor::{Handle, Remote};
 use tokio_process::CommandExt;
 use tera::Tera;
 
-use http_client;
+use http::*;
 use papers::DocumentSpec;
 use error::{Error, ErrorKind};
 
@@ -76,19 +76,19 @@ impl Workspace {
         } = document_spec;
 
         // Download the template and populate it
-        let work = http_client::download_file(&handle.clone(), template_url.0)
+        let work = Client::new(&handle.clone())
+            .get_follow_redirect(template_url.0)
+            .and_then(|res| res.get_body_bytes())
             .and_then(|bytes| {
-                future::result(::std::string::String::from_utf8(bytes))
-                    .map_err(Error::from)
+                future::result(::std::string::String::from_utf8(bytes)).map_err(Error::from)
             }).and_then(move |template_string| {
-                Tera::one_off(&template_string, &variables, false)
-                    .map_err(Error::from)
+                Tera::one_off(&template_string, &variables, false).map_err(Error::from)
             });
 
         Box::new(work)
     }
 
-    pub fn execute(self) -> Box<Future<Item=(), Error=Error>> {
+    pub fn execute(self) -> Box<Future<Item=(), Error=()>> {
         let Workspace {
             handle,
             document_spec,
@@ -114,24 +114,29 @@ impl Workspace {
             logger: logger,
         };
 
+        let error_path_handle = context.handle.clone();
+        let error_path_callback_url = callback_url.0.clone();
+
         // First download the template and populate it
-        let work = http_client::download_file(&context.handle.clone(), template_url.0)
-                .and_then(move |bytes| {
-                    debug!(context.logger, "Successfully downloaded template");
-                    future::result(::std::string::String::from_utf8(bytes))
-                        .map_err(Error::from)
-                        .map(|template_string| (context, template_string))
-                }).and_then(move |(context, template_string)| {
-                    Tera::one_off(&template_string, &variables, false)
-                        .map_err(Error::from)
-                        .map(|latex_string| (context, latex_string))
-                }).and_then(|(context, latex_string)| {
-                    debug!(context.logger, "Writing template to {:?}", template_path.clone());
-                    let mut file = ::std::fs::File::create(template_path.clone()).unwrap();
-                    file.write_all(latex_string.as_bytes()).unwrap();
-                    debug!(context.logger, "Template successfully written to {:?}", template_path.clone());
-                    future::ok((context, template_path))
-                })
+        let work = Client::new(&context.handle.clone())
+            .get_follow_redirect(template_url.0)
+            .and_then(|res| res.get_body_bytes())
+            .and_then(|bytes| {
+                debug!(context.logger, "Successfully downloaded the template");
+                future::result(::std::string::String::from_utf8(bytes))
+                    .map_err(Error::from)
+                    .map(|template_string| (context, template_string))
+            }).and_then(move |(context, template_string)| {
+                Tera::one_off(&template_string, &variables, false)
+                    .map_err(Error::from)
+                    .map(|latex_string| (context, latex_string))
+            }).and_then(|(context, latex_string)| {
+                debug!(context.logger, "Writing template to {:?}", template_path.clone());
+                let mut file = ::std::fs::File::create(template_path.clone()).unwrap();
+                file.write_all(latex_string.as_bytes()).unwrap();
+                debug!(context.logger, "Template successfully written to {:?}", template_path.clone());
+                future::ok((context, template_path))
+            })
 
         // Then download the assets and save them in the temporary directory
                 .and_then(move |(context, template_path)| {
@@ -146,7 +151,9 @@ impl Workspace {
                         let mut path = out_tex_path.clone();
                         path.push(name);
 
-                        http_client::download_file(&inner_handle, url)
+                        Client::new(&inner_handle)
+                            .get_follow_redirect(url)
+                            .and_then(|res| res.get_body_bytes())
                             .map(move |bytes| ::std::fs::File::create(&path).unwrap().write_all(&bytes))
                             .map_err(Error::from)
                     };
@@ -180,28 +187,33 @@ impl Workspace {
                     future::ok((context, path))
                 })
 
-        // Then get the bytes from the generated PDF path
-                .and_then(|(context, pdf_path)| {
+        // Then get a multipart request from the generated PDF
+                .and_then(move |(context, pdf_path)| {
                     debug!(context.logger, "Reading the pdf from {:?}", pdf_path);
-                    let pdf_file = ::std::fs::File::open(pdf_path).unwrap();
-                    let pdf_bytes: Vec<u8> = pdf_file.bytes().collect::<Result<Vec<u8>, _>>().unwrap();
-                    future::ok((context, pdf_bytes))
+                    future::result(
+                        multipart_request_with_file(
+                            Request::new(hyper::Method::Post, callback_url.0),
+                            pdf_path
+                        ).map(|r| (context, r))
+                    )
                 })
-
         // Finally, post the PDF to the callback URL
-                .and_then(move |(context, pdf_bytes)| {
-                    let mut request = Request::new(Post, callback_url.0);
-                    request.set_body(pdf_bytes);
-
+                .and_then(move |(context, request)| {
                     // Avoid dir being dropped early
                     let _dir = dir;
 
                     Client::new(&context.handle).request(request)
                         .map(|_| ())
                         .map_err(Error::from)
+        // Report errors to the callback url
+                }).or_else(move |error| {
+                    let req = Request::new(hyper::Method::Post, error_path_callback_url);
+                    Client::new(&error_path_handle)
+                        .request(multipart_request_with_error(req, error).unwrap())
+                        .map(|_| ())
                 });
 
-        Box::new(work)
+        Box::new(work.map_err(|_| ()))
     }
 }
 

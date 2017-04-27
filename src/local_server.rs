@@ -10,10 +10,13 @@ extern crate tokio_core;
 extern crate tokio_service;
 extern crate serde_json as json;
 
+use papers::http::*;
+
 use futures::future;
 use futures::{Future, Sink, Stream};
 use futures::sync::mpsc;
 use hyper::server;
+use hyper::client;
 use papers::papers::*;
 use std::collections::HashMap;
 use std::fs::File;
@@ -101,15 +104,11 @@ fn main() {
 
     let mut core = tokio_core::reactor::Core::new().unwrap();
     let client = hyper::Client::new(&core.handle());
-    let mut req = hyper::client::Request::new(
-        hyper::Method::Post,
-        "http://127.0.0.1:8019/submit".parse().unwrap());
-    req.set_body(json::to_string(&document_spec).unwrap());
-    {
-        let h = req.headers_mut();
-        h.set(hyper::header::ContentType(mime!(Application/Json)));
-    };
-
+    let req = client::Request::new(
+            hyper::Method::Post,
+            "http://127.0.0.1:8019/submit".parse().unwrap()
+        ).with_body( json::to_string(&document_spec).unwrap())
+        .with_header(hyper::header::ContentType(mime!(Application/Json)));
     let work = client.request(req).then(|_| receiver.into_future());
     core.run(work).unwrap();
 }

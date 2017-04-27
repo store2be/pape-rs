@@ -3,6 +3,9 @@ extern crate error_chain;
 extern crate futures;
 extern crate hyper;
 extern crate mktemp;
+#[macro_use]
+extern crate mime;
+extern crate multipart;
 extern crate serde;
 extern crate serde_json;
 #[macro_use]
@@ -18,7 +21,7 @@ extern crate tokio_service;
 extern crate tokio_process;
 
 pub mod error;
-mod http_client;
+pub mod http;
 pub mod papers;
 mod workspace;
 pub mod server;
