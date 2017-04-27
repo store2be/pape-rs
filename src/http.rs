@@ -4,6 +4,7 @@ use futures::{Future, Stream};
 use mime;
 use multipart;
 use hyper;
+use hyper_tls::HttpsConnector;
 use std::path::PathBuf;
 use hyper::server;
 use hyper::header::{Header, ContentType};
@@ -14,10 +15,8 @@ use hyper::{Uri, StatusCode};
 use std::io::prelude::*;
 use tokio_core::reactor::Handle;
 
-pub fn https_connector(handle: &Handle) -> hyper::client::HttpConnector {
-    let mut connector = hyper::client::HttpConnector::new(4, handle);
-    connector.enforce_http(false);
-    connector
+pub fn https_connector(handle: &Handle) -> HttpsConnector {
+    HttpsConnector::new(4, handle)
 }
 
 pub trait ServerRequestExt {
@@ -87,7 +86,7 @@ pub trait ClientExt {
     fn get_follow_redirect(self, uri: Uri) -> Box<Future<Item=Response, Error=Error>>;
 }
 
-impl ClientExt for Client<hyper::client::HttpConnector> {
+impl ClientExt for Client<HttpsConnector> {
     fn get_follow_redirect(self, uri: Uri) -> Box<Future<Item=Response, Error=Error>> {
         Box::new(future::loop_fn(uri, move |uri| {
             self.get(uri)

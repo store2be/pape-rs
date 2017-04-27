@@ -2,6 +2,7 @@
 extern crate error_chain;
 extern crate futures;
 extern crate hyper;
+extern crate hyper_tls;
 extern crate mktemp;
 #[macro_use]
 extern crate mime;

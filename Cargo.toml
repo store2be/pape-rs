@@ -15,6 +15,7 @@ mktemp = "*"
 mime = "*"
 multipart = "*"
 hyper = { git = "https://github.com/hyperium/hyper" }
+hyper-tls = { git = "https://github.com/hyperium/hyper-tls" }
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
