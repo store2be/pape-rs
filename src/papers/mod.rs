@@ -14,7 +14,7 @@ use error::{Error, ErrorKind};
 pub use self::document_spec::{DocumentSpec, PapersUri};
 use workspace::Workspace;
 
-pub fn log_request(logger, req) {
+pub fn log_request(logger: &slog::Logger, req: &Request) {
     info!(
         logger,
         "{} {} IP={:?}",
@@ -38,7 +38,7 @@ impl Papers {
     }
 
     fn submit(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
-        log_request(self.logger, req);
+        log_request(&self.logger, &req);
         debug!(self.logger, "{:#?}", req);
 
         if !req.has_content_type(mime!(Application/Json)) {
@@ -72,13 +72,7 @@ impl Papers {
     }
 
     fn preview(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
-        info!(
-            self.logger,
-            "{} {} IP={:?}",
-            req.method(),
-            req.path(),
-            req.remote_addr().unwrap(),
-        );
+        log_request(&self.logger, &req);
         debug!(self.logger, "{:#?}", req);
 
         if !req.has_content_type(mime!(Application/Json)) {
@@ -116,13 +110,7 @@ impl Papers {
     }
 
     fn health_check(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
-        info!(
-            self.logger,
-            "{} {} IP={:?}",
-            req.method(),
-            req.path(),
-            req.remote_addr().unwrap(),
-        );
+        log_request(&self.logger, &req);
         Box::new(ok(Response::new().with_status(StatusCode::Ok)))
     }
 }
@@ -139,13 +127,7 @@ impl Service for Papers {
             (&Post, "/preview") => self.preview(req),
             (&Post, "/submit") => self.submit(req),
             _ => {
-                info!(
-                    self.logger,
-                    "{} {} IP={:?}",
-                    req.method(),
-                    req.path(),
-                    req.remote_addr().unwrap(),
-                );
+                log_request(&self.logger, &req);
                 Box::new(ok(Response::new().with_status(StatusCode::NotFound)))
             }
         }.then(|handler_result| {
