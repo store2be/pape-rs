@@ -8,6 +8,7 @@ use hyper::header::ContentType;
 use hyper::mime::{Mime, TopLevel, SubLevel};
 use hyper::server::{Request, Response};
 use serde_json;
+use slog;
 use tokio_service::{NewService, Service};
 use tokio_core::reactor::Remote;
 
@@ -17,16 +18,26 @@ use workspace::Workspace;
 
 pub struct Papers {
     remote: Remote,
+    logger: slog::Logger,
 }
 
 impl Papers {
-    pub fn new(remote: Remote) -> Papers {
+    pub fn new(remote: Remote, logger: slog::Logger) -> Papers {
         Papers {
             remote: remote,
+            logger: logger,
         }
     }
 
     fn submit(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
+        info!(
+            self.logger,
+            "Received a submit request ({}) from {:?}",
+            req.method(),
+            req.remote_addr().unwrap(),
+        );
+        debug!(self.logger, "Full request: {:#?}", req);
+
         let content_type = req.headers().get::<ContentType>().cloned();
 
         // Return an error if the content type is not application/json
@@ -37,6 +48,7 @@ impl Papers {
 
         let remote = self.remote.clone();
         let handle = self.remote.handle().unwrap().clone();
+        let logger = self.logger.clone();
 
         let response = req.body()
             // Ignore hyper errors (i.e. io error, invalid utf-8, etc.) for now
@@ -46,7 +58,6 @@ impl Papers {
             acc.extend_from_slice(&chunk);
             ok::<_, Error>(acc)
         })
-
 
         // Parse the body into a DocumentSpec
         .and_then(|body| {
@@ -59,7 +70,7 @@ impl Papers {
         // Handle the parsed request
         .map_err(|_| ErrorKind::InternalServerError.into())
         .and_then(|document_spec| {
-            result(Workspace::new(remote, document_spec))
+            result(Workspace::new(remote, document_spec, logger))
         }).and_then(move |workspace| {
             handle.spawn(workspace.execute().map(|_| ()).map_err(|err| panic!("{}", err)));
             ok(Response::new().with_status(StatusCode::Ok))
@@ -69,6 +80,13 @@ impl Papers {
     }
 
     fn preview(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
+        info!(
+            self.logger,
+            "Received a preview request ({}) from: {:?}",
+            req.method(),
+            req.remote_addr().unwrap(),
+        );
+        debug!(self.logger, "Full request: {:#?}", req);
         let content_type = {
             req.headers().get::<ContentType>().cloned()
         };
@@ -80,6 +98,7 @@ impl Papers {
         };
 
         let remote = self.remote.clone();
+        let logger = self.logger.clone();
 
         let response = req.body()
             // Ignore hyper errors (i.e. io error, invalid utf-8, etc.) for now
@@ -101,7 +120,7 @@ impl Papers {
 
         // Handle the parsed request
         .and_then(|document_spec| {
-            result(Workspace::new(remote, document_spec))
+            result(Workspace::new(remote, document_spec, logger))
                 .map_err(|err| Error::with_chain(err, ErrorKind::InternalServerError))
         })
         .and_then(|workspace| {
@@ -116,7 +135,13 @@ impl Papers {
 
     }
 
-    fn health_check(&self, _: Request) -> Box<Future<Item=Response, Error=Error>> {
+    fn health_check(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
+        info!(
+            self.logger,
+            "Received a health check request ({}) from {:?}",
+            req.method(),
+            req.remote_addr().unwrap(),
+        );
         ok(Response::new().with_status(StatusCode::Ok)).boxed()
     }
 }
@@ -128,12 +153,20 @@ impl Service for Papers {
     type Future = Box<Future<Item=Response, Error=hyper::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
-        debug!("called with uri {:?}, and method {:?}", req.path(), req.method());
         let response = match (req.method(), req.path()) {
             (&Get, "/healthz") | (&Head, "/healthz") => self.health_check(req),
             (&Post, "/preview") => self.preview(req),
             (&Post, "/submit") => self.submit(req),
-            _ => ok(Response::new().with_status(StatusCode::NotFound)).boxed(),
+            _ => {
+                info!(
+                    self.logger,
+                    "Received a {} request to a non-existing endpoint \"{}\" from {:?}",
+                    req.method(),
+                    req.path(),
+                    req.remote_addr().unwrap(),
+                );
+                ok(Response::new().with_status(StatusCode::NotFound)).boxed()
+            }
         }.then(|handler_result| {
             match handler_result {
                 Ok(response) => ok(response),
@@ -154,6 +187,7 @@ impl NewService for Papers {
     fn new_service(&self) -> Result<Self::Instance, ::std::io::Error> {
         Ok(Papers {
             remote: self.remote.clone(),
+            logger: self.logger.clone(),
         })
     }
 }
