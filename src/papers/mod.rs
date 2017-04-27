@@ -14,6 +14,16 @@ use error::{Error, ErrorKind};
 pub use self::document_spec::{DocumentSpec, PapersUri};
 use workspace::Workspace;
 
+pub fn log_request(logger, req) {
+    info!(
+        logger,
+        "{} {} IP={:?}",
+        req.method(),
+        req.path(),
+        req.remote_addr().unwrap(),
+    );
+}
+
 pub struct Papers {
     remote: Remote,
     logger: slog::Logger,
@@ -28,13 +38,8 @@ impl Papers {
     }
 
     fn submit(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
-        info!(
-            self.logger,
-            "Received a submit request ({}) from {:?}",
-            req.method(),
-            req.remote_addr().unwrap(),
-        );
-        debug!(self.logger, "Full request: {:#?}", req);
+        log_request(self.logger, req);
+        debug!(self.logger, "{:#?}", req);
 
         if !req.has_content_type(mime!(Application/Json)) {
             return Box::new(err(ErrorKind::UnprocessableEntity.into()));
@@ -69,11 +74,12 @@ impl Papers {
     fn preview(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
         info!(
             self.logger,
-            "Received a preview request ({}) from: {:?}",
+            "{} {} IP={:?}",
             req.method(),
+            req.path(),
             req.remote_addr().unwrap(),
         );
-        debug!(self.logger, "Full request: {:#?}", req);
+        debug!(self.logger, "{:#?}", req);
 
         if !req.has_content_type(mime!(Application/Json)) {
             return Box::new(err(ErrorKind::UnprocessableEntity.into()));
@@ -112,8 +118,9 @@ impl Papers {
     fn health_check(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
         info!(
             self.logger,
-            "Received a health check request ({}) from {:?}",
+            "{} {} IP={:?}",
             req.method(),
+            req.path(),
             req.remote_addr().unwrap(),
         );
         Box::new(ok(Response::new().with_status(StatusCode::Ok)))
@@ -134,7 +141,7 @@ impl Service for Papers {
             _ => {
                 info!(
                     self.logger,
-                    "Received a {} request to a non-existing endpoint \"{}\" from {:?}",
+                    "{} {} IP={:?}",
                     req.method(),
                     req.path(),
                     req.remote_addr().unwrap(),
