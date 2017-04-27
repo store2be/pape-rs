@@ -8,6 +8,7 @@ extern crate mktemp;
 extern crate mime;
 extern crate multipart;
 extern crate serde;
+#[macro_use]
 extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;

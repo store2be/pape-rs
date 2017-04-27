@@ -138,7 +138,7 @@ impl Workspace {
             }).and_then(|(context, latex_string)| {
                 debug!(context.logger, "Writing template to {:?}", template_path.clone());
                 let mut file = ::std::fs::File::create(template_path.clone()).unwrap();
-                file.write_all(latex_string.as_bytes()).unwrap();
+                file.write_all(latex_string.as_bytes()).expect("could not write latex file");
                 debug!(context.logger, "Template successfully written to {:?}", template_path.clone());
                 future::ok((context, template_path))
             })
@@ -161,8 +161,11 @@ impl Workspace {
                             .build(&inner_handle.clone())
                             .get_follow_redirect(url)
                             .and_then(|res| res.get_body_bytes())
-                            .map(move |bytes| ::std::fs::File::create(&path).unwrap().write_all(&bytes))
-                            .from_err()
+                            .map(move |bytes| {
+                                ::std::fs::File::create(&path)
+                                    .expect("could not create file")
+                                    .write_all(&bytes)
+                            }).from_err()
                     };
                     debug!(context.logger, "Downloading assets {:?}", named);
                     future::join_all(named.map(download_named))
@@ -172,7 +175,11 @@ impl Workspace {
         // Then run latex
                 .and_then(move |(context, template_path, _)| {
                     let inner_handle = context.handle.clone();
-                    let temp_dir_path = template_path.parent().unwrap().to_str().unwrap();
+                    let temp_dir_path = template_path
+                        .parent()
+                        .expect("could not build temp dir path")
+                        .to_str()
+                        .unwrap();
                     Command::new("xelatex")
                         .arg(&format!("-output-directory={}", temp_dir_path))
                         .arg(template_path.clone())

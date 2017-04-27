@@ -9,6 +9,7 @@ extern crate papers;
 extern crate hyper;
 extern crate tokio_core;
 extern crate tokio_service;
+#[macro_use]
 extern crate serde_json as json;
 
 use papers::error::Error;
@@ -20,7 +21,6 @@ use futures::sync::mpsc;
 use hyper::server;
 use hyper::client;
 use papers::papers::*;
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
@@ -110,11 +110,11 @@ fn main() {
             .unwrap();
     });
 
-    let variables: HashMap<String, String> = if let Ok(file) = File::open("variables.json") {
+    let variables: json::Value = if let Ok(file) = File::open("variables.json") {
         let bytes: Vec<u8> = file.bytes().collect::<Result<Vec<u8>, _>>().unwrap();
         json::from_slice(&bytes).expect("variables.json is invalid json")
     } else {
-        HashMap::new()
+        json!({})
     };
 
     let assets: Vec<PapersUri> = ::std::fs::read_dir(::std::path::Path::new("."))
