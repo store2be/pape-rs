@@ -13,7 +13,7 @@ use tokio_service::{NewService, Service};
 use tokio_core::reactor::Remote;
 
 use error::{Error, ErrorKind};
-pub use self::document_spec::DocumentSpec;
+pub use self::document_spec::{DocumentSpec, PapersUri};
 use workspace::Workspace;
 
 pub struct Papers {
