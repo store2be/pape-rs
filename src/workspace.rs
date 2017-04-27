@@ -116,6 +116,7 @@ impl Workspace {
             logger: logger,
         };
 
+        let error_logger = context.logger.clone();
         let error_path_handle = context.handle.clone();
         let error_path_callback_url = callback_url.0.clone();
 
@@ -216,6 +217,7 @@ impl Workspace {
                         .map_err(Error::from)
         // Report errors to the callback url
                 }).or_else(move |error| {
+                    error!(error_logger, format!("{}", error));
                     let req = Request::new(hyper::Method::Post, error_path_callback_url);
                     Client::new(&error_path_handle)
                         .request(multipart_request_with_error(req, error).unwrap())
