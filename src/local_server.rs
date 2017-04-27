@@ -4,12 +4,14 @@
 extern crate futures;
 #[macro_use]
 extern crate mime;
+extern crate multipart;
 extern crate papers;
 extern crate hyper;
 extern crate tokio_core;
 extern crate tokio_service;
 extern crate serde_json as json;
 
+use papers::error::Error;
 use papers::http::*;
 
 use futures::future;
@@ -51,17 +53,17 @@ impl Service for LocalServer {
         let sender = self.sender.clone();
         match path.as_str() {
             "/callback" => {
-                Box::new(req.body().fold(Vec::new(), |mut acc, chunk| {
-                    acc.extend_from_slice(&chunk);
-                    future::ok::<_, hyper::Error>(acc)
-                }).map(|bytes| {
-                    let mut file = File::create(Path::new("out.pdf")).expect("can't create out.pdf");
-                    file.write_all(&bytes).expect("could not write out.pdf");
+                let headers = req.headers().clone();
+                Box::new(req.get_body_bytes().from_err().map(|bytes| {
+                    multipart::server::Multipart::from_request(MultipartRequest(headers, bytes))
+                        .expect("can't write callback payload")
+                        .save()
+                        .with_dir(".");
                 }).and_then(move |_| {
-                    sender.send(()).map_err(|_| hyper::Error::Incomplete)
+                    sender.send(()).map_err(|_| "Channel error".into())
                 }).map(|_| {
                     server::Response::new()
-                }))
+                }).or_else(|_: Error| future::ok(server::Response::new())))
             },
             path => {
                 let file_path = path.trim_left_matches('/');

@@ -80,7 +80,7 @@ impl Workspace {
             .get_follow_redirect(template_url.0)
             .and_then(|res| res.get_body_bytes())
             .and_then(|bytes| {
-                future::result(::std::string::String::from_utf8(bytes)).map_err(Error::from)
+                future::result(::std::string::String::from_utf8(bytes)).from_err()
             }).and_then(move |template_string| {
                 Tera::one_off(&template_string, &variables, false).map_err(Error::from)
             });
@@ -124,7 +124,7 @@ impl Workspace {
             .and_then(|bytes| {
                 debug!(context.logger, "Successfully downloaded the template");
                 future::result(::std::string::String::from_utf8(bytes))
-                    .map_err(Error::from)
+                    .from_err()
                     .map(|template_string| (context, template_string))
             }).and_then(move |(context, template_string)| {
                 Tera::one_off(&template_string, &variables, false)
@@ -155,7 +155,7 @@ impl Workspace {
                             .get_follow_redirect(url)
                             .and_then(|res| res.get_body_bytes())
                             .map(move |bytes| ::std::fs::File::create(&path).unwrap().write_all(&bytes))
-                            .map_err(Error::from)
+                            .from_err()
                     };
                     debug!(context.logger, "Downloading assets {:?}", named);
                     future::join_all(named.map(download_named))
