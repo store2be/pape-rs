@@ -19,13 +19,17 @@ hyper-tls = { git = "https://github.com/hyperium/hyper-tls" }
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
-slog = "1.5.0"
 slog-term = "1.5.0"
 tera = "*"
 tokio-core = "*"
 tokio-io = "*"
 tokio-process = "*"
 tokio-service = "*"
+
+[dependencies.slog]
+version = "1.5.0"
+default-features = false
+features = ["max_level_debug", "release_max_level_debug"]
 
 [[bin]]
 name = "papers-server"
