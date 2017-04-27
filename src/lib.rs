@@ -9,7 +9,6 @@ extern crate serde_json;
 extern crate serde_derive;
 #[macro_use]
 extern crate slog;
-extern crate slog_async;
 extern crate slog_term;
 extern crate tera;
 extern crate tokio_core;
