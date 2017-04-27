@@ -125,7 +125,7 @@ fn determine_get_result(res: Response) -> Result<GetResult> {
 pub fn multipart_request_with_file(request: Request, path: PathBuf) -> ::std::result::Result<Request, Error> {
     let mut fields = lazy::Multipart::new()
         .add_file("file", path)
-        .prepare()
+        .prepare_threshold(Some(u64::max_value() - 1))
         .map_err(|_| "Failed to prepare multipart body")?;
     let mut bytes: Vec<u8> = Vec::new();
     fields.read_to_end(&mut bytes)?;
