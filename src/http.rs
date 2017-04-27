@@ -2,6 +2,7 @@ use error::*;
 use futures::future;
 use futures::{Future, Stream};
 use mime;
+use multipart;
 use hyper;
 use std::path::PathBuf;
 use hyper::server;
@@ -141,4 +142,28 @@ pub fn multipart_request_with_error(request: Request, error: Error) -> Result<Re
         .with_body(bytes)
         .with_header(ContentType(mime!(Multipart/FormData; Boundary=(fields.boundary()))))
     )
+}
+
+#[derive(Debug)]
+pub struct MultipartRequest(pub hyper::Headers, pub Vec<u8>);
+
+impl multipart::server::HttpRequest for MultipartRequest {
+    type Body = ::std::io::Cursor<Vec<u8>>;
+
+    fn multipart_boundary(&self) -> Option<&str> {
+        let content_type = self.0.get::<ContentType>();
+        match content_type {
+            Some(&ContentType(mime::Mime(mime::TopLevel::Multipart, mime::SubLevel::FormData, ref params))) => {
+                // param is (attr, value)
+                params.iter().find(|param| {
+                    param.0.as_str() == "boundary"
+                }).map(|param| param.1.as_str())
+            },
+            _ => None
+        }
+    }
+
+    fn body(self) -> Self::Body {
+        ::std::io::Cursor::new(self.1)
+    }
 }
