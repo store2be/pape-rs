@@ -121,8 +121,8 @@ impl Workspace {
 
         // First download the template and populate it
         let work = Client::configure()
-            .connector(https_connector(&handle.clone()))
-            .build(&handle.clone())
+            .connector(https_connector(&context.handle.clone()))
+            .build(&context.handle.clone())
             .get_follow_redirect(template_url.0)
             .and_then(|res| res.get_body_bytes())
             .and_then(|bytes| {
@@ -156,8 +156,8 @@ impl Workspace {
                         path.push(name);
 
                         Client::configure()
-                            .connector(https_connector(&handle.clone()))
-                            .build(&handle.clone())
+                            .connector(https_connector(&inner_handle.clone()))
+                            .build(&inner_handle.clone())
                             .get_follow_redirect(url)
                             .and_then(|res| res.get_body_bytes())
                             .map(move |bytes| ::std::fs::File::create(&path).unwrap().write_all(&bytes))
@@ -209,8 +209,8 @@ impl Workspace {
                     let _dir = dir;
 
                     Client::configure()
-                        .connector(https_connector(&handle.clone()))
-                        .build(&handle.clone())
+                        .connector(https_connector(&context.handle.clone()))
+                        .build(&context.handle.clone())
                         .request(request)
                         .map(|_| ())
                         .map_err(Error::from)
