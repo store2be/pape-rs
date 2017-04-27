@@ -5,7 +5,7 @@ RUN apt-get update -y && \
     rm -rf /var/lib/apt/lists/
 
 RUN apt-get update -y && \
-    apt-get install -y build-essential curl && \
+    apt-get install -y build-essential curl libssl-dev libssl1.0.0 && \
     rm -rf /var/lib/apt/lists
 
 WORKDIR /papers
@@ -16,6 +16,10 @@ ENV PATH=/papers/.cargo/bin:$PATH
 RUN curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain stable -y
 RUN rustup default stable
 
-COPY . .
+ENV PATH=/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin:$PATH
+
+# Required because openssl can't be located automatically
+ENV OPENSSL_INCLUDE_DIR=/usr/include
+ENV OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu/
 
 CMD cargo test
