@@ -4,7 +4,7 @@
 
 ![Papers Logo](logo.png)
 
-A Latex template to PDF generation web service written in Rust.
+A Latex template to PDF generation web service written in Rust. Available as a docker image on [Docker Hub](https://hub.docker.com/r/store2be/pape-rs/).
 
 
 ## Endpoints
@@ -37,7 +37,7 @@ Exmpale body:
 }
 ```
 
-* `template_url`: The Latex template as an downloadable URL.
+* `template_url`: The Latex template as a downloadable URL.
 * `asset_urls`: An array of asset URLs that are used in the Latex template. They are downloaded next to the Latex document.
 * `variables`: The variables that are used in the Latex template.
 * `callback_url`: The URL that the final PDF or the error will be sent to.
@@ -65,14 +65,14 @@ Example body:
 }
 ```
 
-* `template_url`: The Latex template as an downloadable URL.
+* `template_url`: The Latex template as a downloadable URL.
 * `asset_urls`: An array of asset URLs that are used in the Latex template. They are downloaded next to the Latex document.
 * `variables`: The variables that are used in the Latex template.
 
 
 ## Example Latex template
 
-The template language is [Tera](https://github.com/Keats/tera)
+The templating language is [Tera](https://github.com/Keats/tera)
 
 ```latex
 \documentclass{article}
