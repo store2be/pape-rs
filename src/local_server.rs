@@ -53,17 +53,37 @@ impl Service for LocalServer {
         let sender = self.sender.clone();
         match path.as_str() {
             "/callback" => {
+                println!("Callback endpoint called");
                 let headers = req.headers().clone();
+                println!("Headers: {:?}", headers);
                 Box::new(req.get_body_bytes().from_err().map(|bytes| {
-                    multipart::server::Multipart::from_request(MultipartRequest(headers, bytes))
-                        .expect("can't write callback payload")
-                        .save()
-                        .with_dir(".");
+                    println!("{} bytes received", bytes.len());
+                    let mut multipart = multipart::server::Multipart::from_request(MultipartRequest(headers, bytes))
+                        .expect("could not parse multipart");
+                    {
+                        let mut entry = multipart
+                            .read_entry()
+                            .expect("could not parse next field")
+                            .expect("next field is empty");
+                        if entry.name != "file" {
+                            panic!("{:?} {:?}", entry.name, entry.data.as_text().unwrap())
+                        } else {
+                            let file = entry.data.as_file().unwrap();
+                            let filename = file.filename.clone().unwrap();
+                            let mut out = File::create(Path::new(&filename)).unwrap();
+                            let bytes = file.bytes().collect::<Result<Vec<u8>, _>>().unwrap();
+                            out.write_all(&bytes).unwrap()
+                        }
+                    }
+                    multipart.save().with_dir(".");
                 }).and_then(move |_| {
                     sender.send(()).map_err(|_| "Channel error".into())
                 }).map(|_| {
                     server::Response::new()
-                }).or_else(|_: Error| future::ok(server::Response::new())))
+                }).or_else(|err: Error| {
+                    panic!("{}", err);
+                    future::ok(server::Response::new())
+                }))
             },
             path => {
                 let file_path = path.trim_left_matches('/');
@@ -97,8 +117,19 @@ fn main() {
         HashMap::new()
     };
 
+    let assets: Vec<PapersUri> = ::std::fs::read_dir(::std::path::Path::new("."))
+        .unwrap()
+        .map(|entry| entry.unwrap())
+        .filter(|entry| entry.file_name().to_str().unwrap() != "template.tex")
+        .map(|entry| {
+            let file_name = entry.file_name();
+            let file_name = file_name.to_str().unwrap();
+            PapersUri(format!("http://127.0.0.1:8733/{}", file_name).parse().unwrap())
+        })
+        .collect();
+
     let document_spec = DocumentSpec {
-        assets_urls: Vec::new(),
+        assets_urls: assets,
         callback_url: PapersUri("http://127.0.0.1:8733/callback".parse().unwrap()),
         template_url: PapersUri("http://127.0.0.1:8733/template.tex".parse().unwrap()),
         variables: variables,
