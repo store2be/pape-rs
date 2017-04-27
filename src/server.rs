@@ -4,11 +4,11 @@ use futures::future;
 use futures::{Future, Stream};
 use hyper::server::Http;
 use slog;
-use slog::*;
-use slog_async::Async;
-use slog_term::{FullFormat, TermDecorator};
+use slog::{Filter, DrainExt, Level};
+use slog_term;
 use tokio_service::NewService;
 use tokio_core;
+
 
 pub struct Server {
     port: i32,
@@ -17,10 +17,13 @@ pub struct Server {
 
 impl Server {
     pub fn new() -> Server {
-        let decorator = TermDecorator::new().build();
-        let drain = FullFormat::new(decorator).build().fuse();
-        let drain = Async::new(drain).build().fuse();
-        let logger = slog::Logger::root(drain, o!("Version" => env!("CARGO_PKG_VERSION")));
+        let minimum_level = match ::std::env::var("PAPERS_LOG_LEVEL") {
+            Ok(ref level) if level.contains("debug") => Level::Debug,
+            _ => Level::Info,
+        };
+        let drain = slog_term::streamer().full().build().fuse();
+        let drain = Filter::new(drain, move |record| record.level().is_at_least(minimum_level));
+        let logger = slog::Logger::root(drain, o!("version" => env!("CARGO_PKG_VERSION")));
         Server {
             port: 8008,
             logger: logger,
