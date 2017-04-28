@@ -150,7 +150,7 @@ impl Workspace {
                     let futures = assets_urls.into_iter().map(move |uri| {
                         let mut path = inner_temp_dir_path.clone();
                         Client::configure()
-                            .connector((https_connector(&inner_handle.clone())))
+                            .connector(https_connector(&inner_handle.clone()))
                             .build(&inner_handle.clone())
                             .get_follow_redirect(&uri.0)
                             .map(move |res| (res, uri.0))
@@ -158,7 +158,7 @@ impl Workspace {
                                 let file_name = res.file_name().take();
                                 res.get_body_bytes().map(|bytes| (bytes, file_name, uri))
                             }).and_then(move |(bytes, file_name, uri)| {
-                                let file_name = file_name.or(extract_file_name_from_uri(&uri));
+                                let file_name = file_name.or_else(|| extract_file_name_from_uri(&uri));
                                 if let Some(file_name) = file_name {
                                     path.push(file_name);
                                     ::std::fs::File::create(&path)
@@ -221,7 +221,7 @@ impl Workspace {
                     error!(error_logger, format!("{}", error));
                     let req = Request::new(hyper::Method::Post, error_path_callback_url);
                     Client::new(&error_path_handle)
-                        .request(multipart_request_with_error(req, error).unwrap())
+                        .request(multipart_request_with_error(req, &error).unwrap())
                         .map(|_| ())
                 });
 

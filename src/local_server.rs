@@ -81,7 +81,7 @@ impl Service for LocalServer {
                 }).map(|_| {
                     server::Response::new()
                 }).or_else(|err: Error| {
-                    panic!("{}", err);
+                    println!("Error on callback endpoint: {}", err);
                     future::ok(server::Response::new())
                 }))
             },
@@ -112,7 +112,7 @@ fn main() {
 
     let variables: json::Value = if let Ok(file) = File::open("variables.json") {
         let bytes: Vec<u8> = file.bytes().collect::<Result<Vec<u8>, _>>().unwrap();
-        json::from_slice(&bytes).expect("variables.json is invalid json")
+        json::from_slice(&bytes).expect("variables.json is not valid JSON")
     } else {
         json!({})
     };

@@ -56,8 +56,8 @@ impl ResponseExt for Response {
     fn file_name(&self) -> Option<String> {
         match self.headers().get::<ContentDisposition>() {
             Some(&ContentDisposition { disposition: DispositionType::Attachment, parameters: ref params }) => {
-                params.iter().find(|param| match *param {
-                    &DispositionParam::Filename(_, _, _) => true,
+                params.iter().find(|param| match **param {
+                    DispositionParam::Filename(_, _, _) => true,
                     _ => false
                 }).and_then(|param| {
                     if let DispositionParam::Filename(_, _, ref bytes) = *param {
@@ -155,7 +155,7 @@ pub fn multipart_request_with_file(request: Request, path: PathBuf) -> ::std::re
     )
 }
 
-pub fn multipart_request_with_error(request: Request, error: Error) -> Result<Request> {
+pub fn multipart_request_with_error(request: Request, error: &Error) -> Result<Request> {
     let mut fields = lazy::Multipart::new()
         .add_text("error", format!("{}", error))
         .prepare()
