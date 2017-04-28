@@ -7,7 +7,7 @@ use hyper;
 use hyper_tls::HttpsConnector;
 use std::path::PathBuf;
 use hyper::server;
-use hyper::header::{Header, ContentType};
+use hyper::header::{Header, ContentDisposition, ContentType, DispositionParam, DispositionType};
 use hyper::client::{Client, Request, Response};
 use multipart::client::lazy;
 use hyper::header::{Location};
@@ -48,10 +48,29 @@ impl ServerRequestExt for server::Request {
 }
 
 pub trait ResponseExt {
+    fn file_name(&self) -> Option<String>;
     fn get_body_bytes(self) -> Box<Future<Item=Vec<u8>, Error=Error>>;
 }
 
 impl ResponseExt for Response {
+    fn file_name(&self) -> Option<String> {
+        match self.headers().get::<ContentDisposition>() {
+            Some(&ContentDisposition { disposition: DispositionType::Attachment, parameters: ref params }) => {
+                params.iter().find(|param| match **param {
+                    DispositionParam::Filename(_, _, _) => true,
+                    _ => false
+                }).and_then(|param| {
+                    if let DispositionParam::Filename(_, _, ref bytes) = *param {
+                        String::from_utf8(bytes.to_owned()).ok()
+                    } else {
+                        None
+                    }
+                })
+            }
+            _ => None,
+        }
+    }
+
     fn get_body_bytes(self) -> Box<Future<Item=Vec<u8>, Error=Error>> {
         Box::new(self.body().map_err(Error::from).fold(Vec::new(), |mut acc, chunk| {
             acc.extend_from_slice(&chunk);
@@ -83,12 +102,12 @@ impl RequestExt for Request<hyper::Body> {
 }
 
 pub trait ClientExt {
-    fn get_follow_redirect(self, uri: Uri) -> Box<Future<Item=Response, Error=Error>>;
+    fn get_follow_redirect(self, uri: &Uri) -> Box<Future<Item=Response, Error=Error>>;
 }
 
 impl ClientExt for Client<HttpsConnector> {
-    fn get_follow_redirect(self, uri: Uri) -> Box<Future<Item=Response, Error=Error>> {
-        Box::new(future::loop_fn(uri, move |uri| {
+    fn get_follow_redirect(self, uri: &Uri) -> Box<Future<Item=Response, Error=Error>> {
+        Box::new(future::loop_fn(uri.clone(), move |uri| {
             self.get(uri)
                 .map_err(Error::from)
                 .and_then(|res| {
@@ -136,7 +155,7 @@ pub fn multipart_request_with_file(request: Request, path: PathBuf) -> ::std::re
     )
 }
 
-pub fn multipart_request_with_error(request: Request, error: Error) -> Result<Request> {
+pub fn multipart_request_with_error(request: Request, error: &Error) -> Result<Request> {
     let mut fields = lazy::Multipart::new()
         .add_text("error", format!("{}", error))
         .prepare()
