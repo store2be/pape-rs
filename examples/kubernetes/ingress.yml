@@ -1,0 +1,13 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: pape-rs
+  namespace: default
+spec:
+  rules:
+    - host: papers-server.example.com
+      http:
+        paths:
+        - backend:
+            serviceName: pape-rs
+            servicePort: 8080
