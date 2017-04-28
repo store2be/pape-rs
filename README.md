@@ -4,7 +4,14 @@
 
 ![Papers Logo](logo.png)
 
-A Latex template to PDF generation web service written in Rust. Available as a docker image on [Docker Hub](https://hub.docker.com/r/store2be/pape-rs/).
+A Latex template to PDF generation web service written in Rust. Papers is available as a docker image on [Docker Hub](https://hub.docker.com/r/store2be/pape-rs/).
+
+
+## Examples / Documentation
+
+* [Simple example](examples/simple)
+* [Papers on Kubernetes](examples/kubernetes)
+* [Merge documents with Papers](examples/concatenation)
 
 
 ## Endpoints

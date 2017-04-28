@@ -1,0 +1,12 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: pape-rs
+  namespace: default
+spec:
+  selector:
+    app: pape-rs
+  type: NodePort
+  ports:
+    - port: 8080
+      targetPort: 8080
