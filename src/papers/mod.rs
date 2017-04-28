@@ -32,8 +32,8 @@ pub struct Papers {
 impl Papers {
     pub fn new(remote: Remote, logger: slog::Logger) -> Papers {
         Papers {
-            remote: remote,
-            logger: logger,
+            remote,
+            logger,
         }
     }
 

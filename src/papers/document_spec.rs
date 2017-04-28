@@ -12,6 +12,8 @@ pub struct DocumentSpec {
     #[serde(default = "default_assets")]
     pub assets_urls: Vec<PapersUri>,
     pub callback_url: PapersUri,
+    #[serde(default = "default_output_file_name")]
+    pub output_file_name: String,
     pub template_url: PapersUri,
     #[serde(default = "default_value")]
     pub variables: json::Value,
@@ -35,8 +37,9 @@ mod uri_deserializer {
 }
 
 
-fn default_value() -> json::Value { json!({}) }
 fn default_assets() -> Vec<PapersUri> { Vec::new() }
+fn default_output_file_name() -> String { "out.pdf".to_string() }
+fn default_value() -> json::Value { json!({}) }
 
 #[cfg(test)]
 mod tests {
