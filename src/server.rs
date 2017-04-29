@@ -9,6 +9,12 @@ use slog_term;
 use tokio_service::NewService;
 use tokio_core;
 
+pub fn is_debug_active() -> bool {
+    match ::std::env::var("PAPERS_LOG_LEVEL") {
+        Ok(ref level) if level.contains("debug") => true,
+        _ => false,
+    }
+}
 
 pub struct Server {
     port: i32,
@@ -17,10 +23,7 @@ pub struct Server {
 
 impl Server {
     pub fn new() -> Server {
-        let minimum_level = match ::std::env::var("PAPERS_LOG_LEVEL") {
-            Ok(ref level) if level.contains("debug") => Level::Debug,
-            _ => Level::Info,
-        };
+        let minimum_level = if is_debug_active() { Level::Debug } else { Level::Info };
         let drain = slog_term::streamer().full().build().fuse();
         let drain = Filter::new(drain, move |record| record.level().is_at_least(minimum_level));
         let logger = slog::Logger::root(drain, o!("version" => env!("CARGO_PKG_VERSION")));

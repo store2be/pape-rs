@@ -15,6 +15,7 @@ use tera::Tera;
 use http::*;
 use papers::DocumentSpec;
 use error::{Error, ErrorKind};
+use server::is_debug_active;
 
 pub struct Workspace {
     dir: Temp,
@@ -178,6 +179,10 @@ impl Workspace {
                     let inner_handle = context.handle.clone();
                     Command::new("xelatex")
                         .arg(&format!("-output-directory={}", &context.temp_dir_path.to_str().unwrap()))
+                        .arg(match is_debug_active() {
+                            true => "-interaction=nonstopmode", // Show all logs
+                            false => "-interaction=batchmode", // Hide logs including errors
+                        })
                         .arg(template_path.clone())
                         .status_async(&inner_handle)
                         .map(|exit_status| (context, exit_status))
