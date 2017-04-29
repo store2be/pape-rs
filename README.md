@@ -14,6 +14,11 @@ A Latex template to PDF generation web service written in Rust. Papers is availa
 * [Merge documents with Papers](examples/concatenation)
 
 
+## Security
+
+**This service is not secure yet so it should not be publicly accessible.** An invader could create a template [that does bad things with Latex](http://www.lieberbiber.de/2017/03/05/arbitrary-code-execution-in-many-tex-distributions/). There is no method in place yet to prevent bad behavior.
+
+
 ## Endpoints
 
 ### GET /healthz
