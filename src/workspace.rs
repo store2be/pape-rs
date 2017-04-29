@@ -179,6 +179,7 @@ impl Workspace {
                     Command::new("xelatex")
                         .arg(&format!("-output-directory={}", &context.temp_dir_path.to_str().unwrap()))
                         .arg("-interaction=nonstopmode")
+                        .arg("-file-line-error")
                         .arg(template_path.clone())
                         .output_async(&inner_handle)
                         .map(|output| (context, output))
