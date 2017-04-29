@@ -26,7 +26,7 @@ impl Server {
         let minimum_level = if is_debug_active() { Level::Debug } else { Level::Info };
         let drain = slog_term::streamer().full().build().fuse();
         let drain = Filter::new(drain, move |record| record.level().is_at_least(minimum_level));
-        let logger = slog::Logger::root(drain, o!("version" => env!("CARGO_PKG_VERSION")));
+        let logger = slog::Logger::root(drain, o!());
         Server {
             port: 8008,
             logger: logger,
@@ -50,7 +50,10 @@ impl Server {
             Http::new().bind_connection(&handle, tcp_stream, socket_addr, papers_service.new_service().unwrap());
             future::ok(())
         });
-        core.run(future::ok(info!(self.logger, "Server started on http://{}", socket_addr)).and_then(|_| work)).unwrap()
+        core.run(future::ok(info!(
+            self.logger.new(o!("version" => env!("CARGO_PKG_VERSION"))),
+            "Server started on http://{}", socket_addr)
+        ).and_then(|_| work)).unwrap()
     }
 }
 

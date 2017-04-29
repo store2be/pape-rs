@@ -21,9 +21,9 @@ error_chain! {
     }
 
     errors {
-        LatexFailed {
+        LatexFailed(output: String) {
             description("The latex command failed")
-            display("The latex command failed")
+            display("The latex command failed with the following output:\n{}", output)
         }
         InternalServerError {
             description("Internal server error")
