@@ -133,11 +133,10 @@ fn determine_get_result(res: Response) -> Result<GetResult> {
         StatusCode::TemporaryRedirect | StatusCode::PermanentRedirect => {
             match res.headers().get::<Location>() {
                 Some(location) => Ok(GetResult::Redirect(location.parse()?)),
-                None => Err(ErrorKind::UnprocessableEntity.into()),
+                None => Err("Redirect without Location header".into()),
             }
         },
-        StatusCode::Ok => Ok(GetResult::Ok(res)),
-        _ => Err(ErrorKind::UnprocessableEntity.into()),
+        _ => Ok(GetResult::Ok(res)),
     }
 }
 
