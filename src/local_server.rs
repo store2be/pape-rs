@@ -8,7 +8,6 @@ extern crate multipart;
 extern crate papers;
 extern crate hyper;
 extern crate tokio_core;
-extern crate tokio_service;
 #[macro_use]
 extern crate serde_json as json;
 
@@ -24,7 +23,6 @@ use papers::papers::*;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
-use tokio_service::Service;
 
 /// This is a simple service that fills two roles:
 ///
@@ -42,7 +40,7 @@ impl LocalServer {
     }
 }
 
-impl Service for LocalServer {
+impl server::Service for LocalServer {
     type Request = server::Request;
     type Response = server::Response;
     type Error = hyper::Error;

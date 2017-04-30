@@ -24,7 +24,6 @@ tera = "*"
 tokio-core = "*"
 tokio-io = "*"
 tokio-process = "*"
-tokio-service = "*"
 
 [dependencies.slog]
 version = "1.5.0"

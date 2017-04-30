@@ -18,7 +18,6 @@ extern crate slog_term;
 extern crate tera;
 extern crate tokio_core;
 extern crate tokio_io;
-extern crate tokio_service;
 extern crate tokio_process;
 
 pub mod error;

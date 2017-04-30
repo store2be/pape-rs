@@ -2,11 +2,10 @@ use papers::Papers;
 
 use futures::future;
 use futures::{Future, Stream};
-use hyper::server::Http;
+use hyper::server::{Http, Service, NewService};
 use slog;
 use slog::{Filter, DrainExt, Level};
 use slog_term;
-use tokio_service::NewService;
 use tokio_core;
 
 
