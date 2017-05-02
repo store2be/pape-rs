@@ -53,13 +53,13 @@ impl Workspace {
     pub fn new(remote: Remote, document_spec: DocumentSpec, logger: slog::Logger) -> Result<Workspace, Error> {
         let dir = Temp::new_dir()?;
         let mut template_path = dir.to_path_buf();
-        template_path.push(Path::new("out.tex"));
+        template_path.push(Path::new(&document_spec.output_file_name.replace("pdf", "tex")));
         Ok(Workspace {
             document_spec: document_spec,
             handle: remote.handle().unwrap(),
             template_path: template_path,
-            dir: dir,
-            logger: logger,
+            dir,
+            logger,
         })
     }
 
@@ -104,14 +104,15 @@ impl Workspace {
             assets_urls,
             callback_url,
             template_url,
+            output_file_name,
             variables,
         } = document_spec;
 
         debug!(logger, "Starting Workspace worker");
 
         let context = WorkspaceContext {
-            handle: handle,
-            logger: logger,
+            handle,
+            logger,
             temp_dir_path: dir.to_path_buf(),
         };
 
@@ -197,7 +198,7 @@ impl Workspace {
         // Then construct the path to the generated PDF
                 .map(move |context| {
                     let mut path = context.temp_dir_path.clone();
-                    path.push(Path::new("out.pdf"));
+                    path.push(Path::new(&output_file_name));
                     (context, path)
                 })
 

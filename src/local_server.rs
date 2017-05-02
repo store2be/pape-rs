@@ -37,7 +37,7 @@ struct LocalServer {
 impl LocalServer {
     pub fn new(sender: mpsc::Sender<()>) -> LocalServer {
         LocalServer {
-            sender: sender,
+            sender,
         }
     }
 }
@@ -131,6 +131,7 @@ fn main() {
     let document_spec = DocumentSpec {
         assets_urls: assets,
         callback_url: PapersUri("http://127.0.0.1:8733/callback".parse().unwrap()),
+        output_file_name: "out.pdf".to_string(),
         template_url: PapersUri("http://127.0.0.1:8733/template.tex".parse().unwrap()),
         variables: variables,
     };
