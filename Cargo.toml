@@ -8,6 +8,7 @@ authors = [
 ]
 
 [dependencies]
+chrono = "*"
 error-chain = "*"
 futures = "*"
 log = "*"

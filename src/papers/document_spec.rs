@@ -1,5 +1,6 @@
 use hyper::Uri;
 use serde_json as json;
+use chrono::UTC;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct PapersUri(#[serde(with = "uri_deserializer")] pub Uri);
@@ -38,7 +39,9 @@ mod uri_deserializer {
 
 
 fn default_assets() -> Vec<PapersUri> { Vec::new() }
-fn default_output_file_name() -> String { "out.pdf".to_string() }
+fn default_output_file_name() -> String {
+    format!("out_{}.pdf", UTC::now().to_rfc3339())
+}
 fn default_value() -> json::Value { json!({}) }
 
 #[cfg(test)]
