@@ -178,15 +178,19 @@ impl Workspace {
                     let inner_handle = context.handle.clone();
                     Command::new("xelatex")
                         .arg(&format!("-output-directory={}", &context.temp_dir_path.to_str().unwrap()))
+                        .arg("-interaction=nonstopmode")
+                        .arg("-file-line-error")
                         .arg(template_path.clone())
-                        .status_async(&inner_handle)
-                        .map(|exit_status| (context, exit_status))
+                        .output_async(&inner_handle)
+                        .map(|output| (context, output))
                         .map_err(Error::from)
-                }).and_then(|(context, exit_status)| {
-                    if exit_status.success() {
+                }).and_then(|(context, output)| {
+                    let stdout = String::from_utf8(output.clone().stdout).unwrap();
+                    if output.status.success() {
+                        debug!(context.logger, "{}", stdout);
                         Ok(context)
                     } else {
-                        Err(ErrorKind::LatexFailed.into())
+                        Err(ErrorKind::LatexFailed(stdout).into())
                     }
                 })
 
@@ -205,6 +209,7 @@ impl Workspace {
                         pdf_path
                     ).map(|r| (context, r))
                 })
+
         // Finally, post the PDF to the callback URL
                 .and_then(move |(context, request)| {
                     // Avoid dir being dropped early
@@ -216,6 +221,7 @@ impl Workspace {
                         .request(request)
                         .map(|_| ())
                         .map_err(Error::from)
+
         // Report errors to the callback url
                 }).or_else(move |error| {
                     error!(error_logger, format!("{}", error));
