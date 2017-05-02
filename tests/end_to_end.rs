@@ -16,6 +16,8 @@ use hyper::server;
 use hyper::header::ContentType;
 use futures::sync::mpsc;
 
+use papers::http::*;
+
 static TEMPLATE: &'static str = r"
 \documentclass{article}
 
@@ -85,15 +87,11 @@ fn test_end_to_end() {
         }
     }"#;
 
-    let request: Request<hyper::Body> = {
-        let mut req = Request::new(hyper::Method::Post, "http://127.0.0.1:8019/submit".parse().unwrap());
-        req.set_body(document_spec);
-        {
-            let mut headers = req.headers_mut();
-            headers.set(ContentType(mime!(Application/Json)));
-        }
-        req
-    };
+    let request: Request<hyper::Body> = Request::new(
+        hyper::Method::Post,
+        "http://127.0.0.1:8019/submit".parse().unwrap()
+    ).with_body(document_spec.into())
+     .with_header(ContentType(mime!(Application/Json)));
 
     let test = test_client.request(request)
         .and_then(|res| {

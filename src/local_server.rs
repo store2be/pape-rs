@@ -140,7 +140,7 @@ fn main() {
     let req = client::Request::new(
             hyper::Method::Post,
             "http://127.0.0.1:8019/submit".parse().unwrap()
-        ).with_body( json::to_string(&document_spec).unwrap())
+        ).with_body( json::to_string(&document_spec).unwrap().into() )
         .with_header(hyper::header::ContentType(mime!(Application/Json)));
     let work = client.request(req).then(|_| receiver.into_future());
     core.run(work).unwrap();
