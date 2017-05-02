@@ -7,7 +7,7 @@ use hyper;
 use hyper_tls::HttpsConnector;
 use std::path::PathBuf;
 use hyper::server;
-use hyper::header::{Header, ContentDisposition, ContentType, DispositionParam, DispositionType};
+use hyper::header::{Header, ContentDisposition, ContentType, DispositionParam};
 use hyper::client::{Client, Request, Response};
 use multipart::client::lazy;
 use hyper::header::{Location};
@@ -17,6 +17,18 @@ use tokio_core::reactor::Handle;
 
 pub fn https_connector(handle: &Handle) -> HttpsConnector {
     HttpsConnector::new(4, handle)
+}
+
+pub trait ServerResponseExt {
+    fn with_body<T: Into<hyper::Body>>(self, body: T) -> Self;
+}
+
+impl ServerResponseExt for server::Response {
+    fn with_body<T: Into<hyper::Body>>(self, body: T) -> Self {
+        let mut res = self;
+        res.set_body(body.into());
+        res
+    }
 }
 
 pub trait ServerRequestExt {
@@ -55,7 +67,7 @@ pub trait ResponseExt {
 impl ResponseExt for Response {
     fn file_name(&self) -> Option<String> {
         match self.headers().get::<ContentDisposition>() {
-            Some(&ContentDisposition { disposition: DispositionType::Attachment, parameters: ref params }) => {
+            Some(&ContentDisposition { disposition: _, parameters: ref params }) => {
                 params.iter().find(|param| match **param {
                     DispositionParam::Filename(_, _, _) => true,
                     _ => false
@@ -82,10 +94,10 @@ impl ResponseExt for Response {
 pub trait RequestExt {
     fn with_header<T: Header>(self, header: T) -> Self;
 
-    fn with_body<T: Into<hyper::Body>>(self, body: T) -> Self;
+    fn with_body(self, body: hyper::Body) -> Self;
 }
 
-impl RequestExt for Request<hyper::Body> {
+impl RequestExt for Request {
     fn with_header<T: Header>(mut self, header: T) -> Self {
         {
             let mut h = self.headers_mut();
@@ -94,9 +106,9 @@ impl RequestExt for Request<hyper::Body> {
         self
     }
 
-    fn with_body<T: Into<hyper::Body>>(self, body: T) -> Self {
+    fn with_body(self, body: hyper::Body) -> Self {
         let mut req = self;
-        req.set_body(body.into());
+        req.set_body(body);
         req
     }
 }
@@ -149,7 +161,7 @@ pub fn multipart_request_with_file(request: Request, path: PathBuf) -> ::std::re
     fields.read_to_end(&mut bytes)?;
     Ok(
         request
-        .with_body(bytes)
+        .with_body(bytes.into())
         .with_header(ContentType(mime!(Multipart/FormData; Boundary=(fields.boundary()))))
     )
 }
@@ -163,7 +175,7 @@ pub fn multipart_request_with_error(request: Request, error: &Error) -> Result<R
     fields.read_to_end(&mut bytes)?;
     Ok(
         request
-        .with_body(bytes)
+        .with_body(bytes.into())
         .with_header(ContentType(mime!(Multipart/FormData; Boundary=(fields.boundary()))))
     )
 }
@@ -189,5 +201,129 @@ impl multipart::server::HttpRequest for MultipartRequest {
 
     fn body(self) -> Self::Body {
         ::std::io::Cursor::new(self.1)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hyper;
+    use hyper::server::Service;
+    use tokio_core;
+    use futures::future;
+
+    #[derive(Debug, Clone)]
+    struct MockServer {
+        response_to_logo_png: hyper::header::ContentDisposition,
+    }
+
+    impl MockServer {
+        fn respond_to_logo_png_with(content_disposition: hyper::header::ContentDisposition) -> MockServer {
+            MockServer {
+                response_to_logo_png: content_disposition,
+            }
+        }
+
+        fn start(self, port: i32) -> ::std::thread::JoinHandle<()> {
+            ::std::thread::spawn(move || {
+                hyper::server::Http::new()
+                    .bind(&format!("127.0.0.1:{}", port).parse().unwrap(), move || Ok(self.clone()))
+                    .unwrap()
+                    .run()
+                    .unwrap();
+            })
+        }
+    }
+
+    impl Service for MockServer {
+        type Request = server::Request;
+        type Response = server::Response;
+        type Error = hyper::Error;
+        type Future = Box<Future<Item=server::Response, Error=hyper::Error>>;
+
+        fn call(&self, req: Self::Request) -> Self::Future {
+            let res = match req.path() {
+                "/assets/logo.png" => {
+                    server::Response::new()
+                        .with_body(b"54321" as &[u8])
+                        .with_header(self.response_to_logo_png.clone())
+                },
+                _ => server::Response::new().with_status(hyper::StatusCode::NotFound),
+
+            };
+            Box::new(future::ok(res))
+        }
+    }
+
+
+    #[test]
+    fn test_file_name_prefers_content_disposition() {
+        let _join = MockServer::respond_to_logo_png_with(hyper::header::ContentDisposition {
+            disposition: hyper::header::DispositionType::Attachment,
+            parameters: vec![hyper::header::DispositionParam::Filename(
+                hyper::header::Charset::Ext("UTF-8".to_string()),
+                None,
+                b"this_should_be_the_filename.png".to_vec())],
+        }).start(8734);
+
+        let mut core = tokio_core::reactor::Core::new().unwrap();
+        let client = hyper::client::Client::new(&core.handle());
+        let request: hyper::client::Request<hyper::Body> = Request::new(
+            hyper::Method::Get,
+            "http://127.0.0.1:8738/assets/logo.png".parse().unwrap()
+        );
+
+        let work = client.request(request);
+
+        let response = core.run(work).unwrap();
+        assert_eq!(response.file_name(), Some("this_should_be_the_filename.png".to_string()))
+    }
+
+    #[test]
+    fn test_file_name_works_with_content_disposition_inline() {
+        let _join = MockServer::respond_to_logo_png_with(hyper::header::ContentDisposition {
+            disposition: hyper::header::DispositionType::Inline,
+            parameters: vec![hyper::header::DispositionParam::Filename(
+                hyper::header::Charset::Ext("UTF-8".to_string()),
+                None,
+                b"this_should_be_the_filename.png".to_vec())],
+        }).start(8738);
+
+        let mut core = tokio_core::reactor::Core::new().unwrap();
+        let client = hyper::client::Client::new(&core.handle());
+        let request: hyper::client::Request<hyper::Body> = Request::new(
+            hyper::Method::Get,
+            "http://127.0.0.1:8738/assets/logo.png".parse().unwrap()
+        );
+
+        let work = client.request(request);
+
+        let response = core.run(work).unwrap();
+        assert_eq!(response.file_name(), Some("this_should_be_the_filename.png".to_string()))
+    }
+
+    // S3 returns Content-Disposition without disposition (just filename)
+    #[test]
+    fn test_content_disposition_works_without_disposition() {
+        let _join = MockServer::respond_to_logo_png_with(hyper::header::ContentDisposition {
+                disposition: hyper::header::DispositionType::Ext("".to_string()),
+                parameters: vec![hyper::header::DispositionParam::Filename(
+                    hyper::header::Charset::Ext("UTF-8".to_string()),
+                    None,
+                    b"this_should_be_the_filename.png".to_vec(),
+                    )],
+        }).start(8740);
+
+        let mut core = tokio_core::reactor::Core::new().unwrap();
+        let client = hyper::client::Client::new(&core.handle());
+        let request: hyper::client::Request<hyper::Body> = Request::new(
+            hyper::Method::Get,
+            "http://127.0.0.1:8740/assets/logo.png".parse().unwrap()
+        );
+
+        let work = client.request(request);
+
+        let response = core.run(work).unwrap();
+        assert_eq!(response.file_name(), Some("this_should_be_the_filename.png".to_string()))
     }
 }
