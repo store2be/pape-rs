@@ -113,7 +113,7 @@ Default: <empty string>
 
 Example:
 ```
-PAPERS_BEARER=secrect-string
+PAPERS_BEARER=secret-string
 => Authorization=Bearer secret-string
 ```
 

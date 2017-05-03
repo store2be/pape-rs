@@ -39,24 +39,33 @@ impl Papers {
         }
     }
 
-    fn submit(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
-        log_request(&self.logger, &req);
-        debug!(self.logger, "{:#?}", req);
-
+    // Check Authorization header if `PAPERS_BEARER` env var is set
+    fn check_auth_header(&self, req: &Request) -> Result<(), Error> {
         let headers = req.headers().clone();
         let authorization = headers.get::<Authorization<Bearer>>();
         match authorization {
             Some(header_bearer) => {
                 if self.auth != "".to_string() && header_bearer.token != self.auth {
-                    return Box::new(err(ErrorKind::Forbidden.into()));
+                    return Err(Error::from_kind(ErrorKind::Forbidden));
                 }
             },
             None => {
                 if self.auth != "".to_string() {
-                    return Box::new(err(ErrorKind::Forbidden.into()));
+                    return Err(Error::from_kind(ErrorKind::Forbidden));
                 }
             }
         }
+        Ok(())
+    }
+
+    fn submit(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
+        log_request(&self.logger, &req);
+        debug!(self.logger, "{:#?}", req);
+
+        if let Err(error) = self.check_auth_header(&req) {
+            return Box::new(err(error))
+        }
+
         if !req.has_content_type(mime!(Application/Json)) {
             return Box::new(err(ErrorKind::UnprocessableEntity.into()));
         }
@@ -90,6 +99,10 @@ impl Papers {
     fn preview(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
         log_request(&self.logger, &req);
         debug!(self.logger, "{:#?}", req);
+
+        if let Err(error) = self.check_auth_header(&req) {
+            return Box::new(err(error))
+        }
 
         if !req.has_content_type(mime!(Application/Json)) {
             return Box::new(err(ErrorKind::UnprocessableEntity.into()));
