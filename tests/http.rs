@@ -1,7 +1,6 @@
 extern crate futures;
 extern crate hyper;
 extern crate tokio_core;
-extern crate tokio_service;
 extern crate papers;
 
 use futures::Future;

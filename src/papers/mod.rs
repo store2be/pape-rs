@@ -3,10 +3,9 @@ mod document_spec;
 use futures::future::{Future, ok, err, result};
 use hyper;
 use hyper::{Get, Post, Head, StatusCode};
-use hyper::server::{Request, Response};
+use hyper::server::{Request, Response, Service, NewService};
 use serde_json;
 use slog;
-use tokio_service::{NewService, Service};
 use tokio_core::reactor::Remote;
 
 use http::*;

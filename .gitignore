@@ -1,5 +1,4 @@
 .cargo
 target/
 **/*.rs.bk
-Cargo.lock
 out.pdf

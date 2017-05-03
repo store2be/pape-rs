@@ -3,14 +3,12 @@ extern crate futures;
 extern crate mime;
 extern crate hyper;
 extern crate tokio_core;
-extern crate tokio_service;
 extern crate papers;
 extern crate serde_json as json;
 
 use futures::future;
 use futures::{Future, Stream};
 use hyper::client::{Client, Request};
-use tokio_service::Service;
 use hyper::server;
 use hyper::header::ContentType;
 
@@ -32,7 +30,7 @@ hello, world
 
 struct MockServer;
 
-impl Service for MockServer {
+impl server::Service for MockServer {
     type Request = server::Request;
     type Response = server::Response;
     type Error = hyper::Error;
