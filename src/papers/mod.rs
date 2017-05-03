@@ -4,6 +4,7 @@ use futures::future::{Future, ok, err, result};
 use hyper;
 use hyper::{Get, Post, Head, StatusCode};
 use hyper::server::{Request, Response, Service, NewService};
+use hyper::header::{Authorization, Bearer};
 use serde_json;
 use slog;
 use tokio_core::reactor::Remote;
@@ -24,13 +25,15 @@ pub fn log_request(logger: &slog::Logger, req: &Request) {
 }
 
 pub struct Papers {
+    auth: String,
     remote: Remote,
     logger: slog::Logger,
 }
 
 impl Papers {
-    pub fn new(remote: Remote, logger: slog::Logger) -> Papers {
+    pub fn new(remote: Remote, logger: slog::Logger, auth: String) -> Papers {
         Papers {
+            auth,
             remote,
             logger,
         }
@@ -40,6 +43,20 @@ impl Papers {
         log_request(&self.logger, &req);
         debug!(self.logger, "{:#?}", req);
 
+        let headers = req.headers().clone();
+        let authorization = headers.get::<Authorization<Bearer>>();
+        match authorization {
+            Some(header_bearer) => {
+                if self.auth != "".to_string() && header_bearer.token != self.auth {
+                    return Box::new(err(ErrorKind::Forbidden.into()));
+                }
+            },
+            None => {
+                if self.auth != "".to_string() {
+                    return Box::new(err(ErrorKind::Forbidden.into()));
+                }
+            }
+        }
         if !req.has_content_type(mime!(Application/Json)) {
             return Box::new(err(ErrorKind::UnprocessableEntity.into()));
         }
@@ -148,6 +165,7 @@ impl NewService for Papers {
 
     fn new_service(&self) -> Result<Self::Instance, ::std::io::Error> {
         Ok(Papers {
+            auth: self.auth.clone(),
             remote: self.remote.clone(),
             logger: self.logger.clone(),
         })

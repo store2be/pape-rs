@@ -16,7 +16,7 @@ A Latex template to PDF generation web service written in Rust. Papers is availa
 
 ## Security
 
-**This service is not secure yet so it should not be publicly accessible.** An invader could create a template [that does bad things with Latex](http://www.lieberbiber.de/2017/03/05/arbitrary-code-execution-in-many-tex-distributions/). There is no method in place yet to prevent bad behavior.
+**This service is not secure yet so it should not be publicly accessible.** An invader could create a template [that does bad things with Latex](http://www.lieberbiber.de/2017/03/05/arbitrary-code-execution-in-many-tex-distributions/). Therefore, it is recommended to set the `PAPERS_BEARER` environment variable to a long and arbitrary string and set this string in the `Authorization` header of every request.
 
 
 ## Endpoints
@@ -103,6 +103,20 @@ Take a look at the [simple example](examples/simple) in the examples directory f
 
 ## Explanation of the environment variables
 
+### PAPERS_BEARER
+
+The string that will be checked in the `Authorization` header.
+
+```
+Default: <empty string>
+```
+
+Example:
+```
+PAPERS_BEARER=secrect-string
+=> Authorization=Bearer secret-string
+```
+
 ### PAPERS_LOG_LEVEL
 
 The logger level for the papers service.
@@ -110,4 +124,12 @@ The logger level for the papers service.
 ```
 Default: info
 Other options: debug
+```
+
+### PAPERS_PORT
+
+The port the Papers sever runs on.
+
+```
+Default: 8080
 ```

@@ -21,6 +21,10 @@ error_chain! {
     }
 
     errors {
+        Forbidden {
+            description("Forbidden")
+            display("Forbidden")
+        }
         LatexFailed(output: String) {
             description("The latex command failed")
             display("The latex command failed with the following output:\n{}", output)
@@ -40,6 +44,7 @@ impl Error {
     pub fn into_response(self) -> Response {
         match self {
             Error(ErrorKind::UnprocessableEntity, _) => Response::new().with_status(StatusCode::UnprocessableEntity),
+            Error(ErrorKind::Forbidden, _) => Response::new().with_status(StatusCode::Forbidden),
             Error(ErrorKind::InternalServerError, _) => Response::new().with_status(StatusCode::InternalServerError),
             Error(ErrorKind::Tera(_), _)
             | Error(ErrorKind::UriError(_), _)
