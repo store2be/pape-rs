@@ -55,9 +55,9 @@ impl Workspace {
         let mut template_path = dir.to_path_buf();
         template_path.push(Path::new(&document_spec.output_file_name.replace("pdf", "tex")));
         Ok(Workspace {
-            document_spec: document_spec,
+            document_spec,
             handle: remote.handle().unwrap(),
-            template_path: template_path,
+            template_path,
             dir,
             logger,
         })
@@ -138,10 +138,10 @@ impl Workspace {
                     .map_err(Error::from)
                     .map(|latex_string| (context, latex_string))
             }).and_then(|(context, latex_string)| {
-                debug!(context.logger, "Writing template to {:?}", template_path.clone());
-                let mut file = ::std::fs::File::create(template_path.clone()).unwrap();
+                debug!(context.logger, "Writing template to {:?}", &template_path);
+                let mut file = ::std::fs::File::create(&template_path).unwrap();
                 file.write_all(latex_string.as_bytes()).expect("could not write latex file");
-                debug!(context.logger, "Template successfully written to {:?}", template_path.clone());
+                debug!(context.logger, "Template successfully written to {:?}", &template_path);
                 Ok((context, template_path))
             })
 
@@ -149,9 +149,11 @@ impl Workspace {
                 .and_then(move |(context, template_path)| {
                     let inner_handle = context.handle.clone();
                     let inner_temp_dir_path = context.temp_dir_path.clone();
+                    let inner_logger = context.logger.clone();
                     debug!(context.logger, "Downloading assets {:?}", assets_urls);
                     let futures = assets_urls.into_iter().map(move |uri| {
                         let mut path = inner_temp_dir_path.clone();
+                        let logger = inner_logger.clone();
                         Client::configure()
                             .connector(https_connector(&inner_handle.clone()))
                             .build(&inner_handle.clone())
@@ -164,6 +166,7 @@ impl Workspace {
                                 let file_name = file_name.or_else(|| extract_file_name_from_uri(&uri));
                                 if let Some(file_name) = file_name {
                                     path.push(file_name);
+                                    debug!(logger, "Writing asset {:?} as {:?}", uri, path);
                                     ::std::fs::File::create(&path)
                                         .and_then(|mut file| file.write_all(&bytes))
                                         .map(|_| ())
@@ -180,9 +183,10 @@ impl Workspace {
                 .and_then(move |(context, template_path, _)| {
                     let inner_handle = context.handle.clone();
                     Command::new("xelatex")
-                        .arg(&format!("-output-directory={}", &context.temp_dir_path.to_str().unwrap()))
+                        .current_dir(&context.temp_dir_path)
                         .arg("-interaction=nonstopmode")
                         .arg("-file-line-error")
+                        .arg("-shell-restricted")
                         .arg(template_path.clone())
                         .output_async(&inner_handle)
                         .map(|output| (context, output))
