@@ -100,6 +100,8 @@ impl Workspace {
             logger,
         } = self;
 
+        debug!(logger, "Trying to generate PDF with document spec: {:?}", document_spec);
+
         let DocumentSpec {
             assets_urls,
             callback_url,
