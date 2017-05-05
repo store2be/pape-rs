@@ -128,7 +128,7 @@ impl Workspace {
             .and_then(|res| res.get_body_bytes())
             .and_then(|bytes| {
                 debug!(context.logger, "Successfully downloaded the template");
-                ::std::string::String::from_utf8(bytes)
+                String::from_utf8(bytes)
                     .map_err(Error::from)
                     .map(|template_string| (context, template_string))
             }).and_then(move |(context, template_string)| {
@@ -174,7 +174,7 @@ impl Workspace {
                     future::join_all(futures).map(|result| (context, template_path, result))
                 })
 
-        // Then run latex
+                // Then run latex
                 .and_then(move |(context, template_path, _)| {
                     let inner_handle = context.handle.clone();
                     Command::new("xelatex")
@@ -186,7 +186,7 @@ impl Workspace {
                         .map(|output| (context, output))
                         .map_err(Error::from)
                 }).and_then(|(context, output)| {
-                    let stdout = String::from_utf8(output.clone().stdout).unwrap();
+                    let stdout = String::from_utf8(output.stdout).unwrap();
                     if output.status.success() {
                         debug!(context.logger, "{}", stdout);
                         Ok(context)
@@ -195,36 +195,55 @@ impl Workspace {
                     }
                 })
 
-        // Then construct the path to the generated PDF
+                // Then construct the path to the generated PDF
                 .map(move |context| {
                     let mut path = context.temp_dir_path.clone();
                     path.push(Path::new(&output_file_name));
                     (context, path)
                 })
 
-        // Then get a multipart request from the generated PDF
+                // Then get a multipart request from the generated PDF
                 .and_then(move |(context, pdf_path)| {
                     debug!(context.logger, "Reading the pdf from {:?}", pdf_path);
+                    debug!(context.logger, "Sending generated PDF to {}", callback_url.0);
                     multipart_request_with_file(
                         Request::new(hyper::Method::Post, callback_url.0),
                         pdf_path
                     ).map(|r| (context, r))
                 })
 
-        // Finally, post the PDF to the callback URL
+                // Finally, post the PDF to the callback URL
                 .and_then(move |(context, request)| {
                     // Avoid dir being dropped early
                     let _dir = dir;
-
                     Client::configure()
                         .connector(https_connector(&context.handle.clone()))
                         .build(&context.handle.clone())
                         .request(request)
-                        .map(|_| ())
+                        .map(|response| (context, response))
                         .map_err(Error::from)
+                }).and_then(|(context, response)| {
+                    info!(
+                        context.logger,
+                        "Callback response: {}",
+                        response.status().canonical_reason().unwrap_or("unknown")
+                    );
 
-        // Report errors to the callback url
-                }).or_else(move |error| {
+                    response
+                        .get_body_bytes()
+                        .map(|bytes| (context, bytes))
+
+                }).and_then(|(context, bytes)| {
+                    debug!(
+                        context.logger,
+                        "Callback response body: {:?}",
+                        ::std::str::from_utf8(&bytes).unwrap_or("<binary content>")
+                    );
+                    future::ok(())
+                })
+
+                // Report errors to the callback url
+                .or_else(move |error| {
                     error!(error_logger, format!("{}", error));
                     let req = Request::new(hyper::Method::Post, error_path_callback_url);
                     Client::new(&error_path_handle)
