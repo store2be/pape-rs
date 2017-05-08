@@ -15,3 +15,11 @@ spec:
           image: store2be/pape-rs
           ports:
             - containerPort: 8080
+          env:
+            - name: PAPERS_LOG_LEVEL
+              value: debug
+            - name: PAPERS_BEARER
+              valueFrom:
+                secretKeyRef:
+                  name: papers-bearer
+                  key: bearer
