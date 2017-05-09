@@ -13,6 +13,8 @@ papers can be used as a concatenation tool.
 ```json
 {
     "assets_urls": [
+        "https://example.com/papers_logo.png",
+        "https://example.com/woosh.jpeg",
         "https://example.com/vektoranalysis_teil_1.pdf",
         "https://example.com/linux_praxisbuch_shellprogrammierung",
         "https://example.com/batch_programmierung.pdf"
@@ -21,10 +23,21 @@ papers can be used as a concatenation tool.
     "callback_url": "https://example.com/callback&token=914f07aa876128e936",
     "variables": {
         "concat_pdfs": [
+            "papers_logo.png",
+            "woosh.jpeg",
             "vektoranalysis_teil_1.pdf",
             "linux_praxisbuch_shellprogrammierung",
             "batch_programmierung.pdf"
         ],
     }
 }
+```
+
+## or just run the local server to try it out
+
+(See [simple example](../simple))
+
+```
+$ cd examples/concatenation
+$ papers-local
 ```

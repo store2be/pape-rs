@@ -1,5 +1,7 @@
 {
     "concat_pdfs": [
+        "papers_logo.png",
+        "woosh.jpeg",
         "vektoranalysis_teil_1.pdf",
         "linux_praxisbuch_shellprogrammierung",
         "batch_programmierung.pdf"
