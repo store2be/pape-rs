@@ -12,7 +12,7 @@ use tokio_core::reactor::Remote;
 use http::*;
 use error::{Error, ErrorKind};
 pub use self::document_spec::{DocumentSpec, PapersUri};
-use workspace::Workspace;
+use renderer::Renderer;
 
 pub fn log_request(logger: &slog::Logger, req: &Request) {
     info!(
@@ -87,9 +87,9 @@ impl Papers {
         // Handle the parsed request
         .map_err(|_| ErrorKind::InternalServerError.into())
         .and_then(|document_spec| {
-            result(Workspace::new(remote, document_spec, logger))
-        }).and_then(move |workspace| {
-            handle.spawn(workspace.execute());
+            result(Renderer::new(remote, document_spec, logger))
+        }).and_then(move |renderer| {
+            handle.spawn(renderer.execute());
             ok(Response::new().with_status(StatusCode::Ok))
         }).map_err(|_| ErrorKind::InternalServerError.into());
 
@@ -123,11 +123,11 @@ impl Papers {
 
         // Handle the parsed request
         .and_then(|document_spec| {
-            result(Workspace::new(remote, document_spec, logger))
+            result(Renderer::new(remote, document_spec, logger))
                 .map_err(|err| Error::with_chain(err, ErrorKind::InternalServerError))
         })
-        .and_then(|workspace| {
-            workspace.preview()
+        .and_then(|renderer| {
+            renderer.preview()
         }).and_then(|populated_template| {
             ok(Response::new()
                 .with_status(StatusCode::Ok)
