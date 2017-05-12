@@ -45,12 +45,12 @@ impl Papers {
         let authorization = headers.get::<Authorization<Bearer>>();
         match authorization {
             Some(header_bearer) => {
-                if self.auth != "".to_string() && header_bearer.token != self.auth {
+                if self.auth != "" && header_bearer.token != self.auth {
                     return Err(Error::from_kind(ErrorKind::Forbidden));
                 }
             },
             None => {
-                if self.auth != "".to_string() {
+                if self.auth != "" {
                     return Err(Error::from_kind(ErrorKind::Forbidden));
                 }
             }
