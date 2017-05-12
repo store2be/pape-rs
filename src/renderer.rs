@@ -24,14 +24,7 @@ pub struct Renderer {
     logger: slog::Logger,
 }
 
-struct RendererContext {
-    handle: Handle,
-    logger: slog::Logger,
-    temp_dir_path: ::std::path::PathBuf,
-}
-
-/// We ignore file names that end with a slash for now, and always determine the file name from the Uri
-fn extract_file_name_from_uri(uri: &Uri) -> Option<String> {
+fn extract_filename_from_uri(uri: &Uri) -> Option<String> {
     match uri.path().split('/').last() {
         Some(name) => {
             if !name.is_empty() {
@@ -44,15 +37,15 @@ fn extract_file_name_from_uri(uri: &Uri) -> Option<String> {
     }
 }
 
-/// Since `mktemp::Temp` implements Drop by deleting the directory, we don't need to worry about
-/// leaving files or directories behind. On the flipside, we must ensure it is not dropped before
-/// the last returned future that needs the directory finishes.
+// Since `mktemp::Temp` implements Drop by deleting the directory, we don't need to worry about
+// leaving files or directories behind. On the flipside, we must ensure it is not dropped before
+// the last returned future that needs the directory finishes.
 impl Renderer {
 
     pub fn new(remote: Remote, document_spec: DocumentSpec, logger: slog::Logger) -> Result<Renderer, Error> {
         let dir = Temp::new_dir()?;
         let mut template_path = dir.to_path_buf();
-        template_path.push(Path::new(&document_spec.output_file_name.replace("pdf", "tex")));
+        template_path.push(Path::new(&document_spec.output_filename.replace("pdf", "tex")));
         Ok(Renderer {
             document_spec,
             handle: remote.handle().unwrap(),
@@ -64,9 +57,9 @@ impl Renderer {
 
     fn get_template(&self) -> Box<Future<Item=hyper::client::Response, Error=Error>> {
         Client::configure()
-            .connector(https_connector(&self.handle.clone()))
-            .build(&self.handle.clone())
-            .get_follow_redirect(&self.document_spec.template_url.0.clone())
+            .connector(https_connector(&self.handle))
+            .build(&self.handle)
+            .get_follow_redirect(&self.document_spec.template_url.0)
     }
 
     pub fn preview(self) -> Box<Future<Item=String, Error=Error>> {
@@ -97,168 +90,189 @@ impl Renderer {
         let DocumentSpec {
             assets_urls,
             callback_url,
-            output_file_name,
+            output_filename,
             variables,
             ..
         } = document_spec;
 
         debug!(logger, "Starting Renderer worker");
 
-        let context = RendererContext {
-            handle,
-            logger,
-            temp_dir_path: dir.to_path_buf(),
-        };
-
-        let error_logger = context.logger.clone();
-        let error_path_handle = context.handle.clone();
-        let error_path_callback_url = callback_url.0.clone();
+        let temp_dir_path = dir.to_path_buf();
 
         // First download the template and populate it
-        let work = res.and_then(|res| res.get_body_bytes())
-            .and_then(|bytes| {
-                debug!(context.logger, "Successfully downloaded the template");
+        let bytes = res.and_then(|res| res.get_body_bytes());
+
+        let template_string = {
+            let logger = logger.clone();
+            bytes.and_then(move |bytes| {
+                debug!(logger, "Successfully downloaded the template");
                 String::from_utf8(bytes)
                     .map_err(Error::from)
-                    .map(|template_string| (context, template_string))
-            }).and_then(move |(context, template_string)| {
-                Tera::one_off(&template_string, &variables, false)
-                    .map_err(Error::from)
-                    .map(|latex_string| (context, latex_string))
-            }).and_then(|(context, latex_string)| {
-                debug!(context.logger, "Writing template to {:?}", &template_path);
+            })
+        };
+
+        let rendered_template = template_string.and_then(move |template_string| {
+            Tera::one_off(&template_string, &variables, false)
+                .map_err(Error::from)
+        });
+
+        let written_template_path = {
+            let logger = logger.clone();
+            let template_path = template_path.clone();
+            rendered_template.and_then(move |latex_string| {
+                debug!(logger, "Writing template to {:?}", &template_path);
                 let mut file = ::std::fs::File::create(&template_path).unwrap();
                 file.write_all(latex_string.as_bytes()).expect("could not write latex file");
-                debug!(context.logger, "Template successfully written to {:?}", &template_path);
-                Ok((context, template_path))
+                debug!(logger, "Template successfully written to {:?}", &template_path);
+                Ok(template_path)
             })
+        };
 
-        // Then download the assets and save them in the temporary directory
-                .and_then(move |(context, template_path)| {
-                    let inner_handle = context.handle.clone();
-                    let inner_temp_dir_path = context.temp_dir_path.clone();
-                    let inner_logger = context.logger.clone();
-                    debug!(context.logger, "Downloading assets {:?}", assets_urls);
-                    let futures = assets_urls.into_iter().map(move |uri| {
-                        let mut path = inner_temp_dir_path.clone();
-                        let logger = inner_logger.clone();
-                        Client::configure()
-                            .connector(https_connector(&inner_handle.clone()))
-                            .build(&inner_handle.clone())
-                            .get_follow_redirect(&uri.0)
-                            .map(move |res| (res, uri.0))
-                            .and_then(move |(res, uri)| {
-                                let file_name = res.file_name().take();
-                                res.get_body_bytes().map(|bytes| (bytes, file_name, uri))
-                            }).and_then(move |(bytes, file_name, uri)| {
-                                let file_name = file_name.or_else(|| extract_file_name_from_uri(&uri));
-                                if let Some(file_name) = file_name {
-                                    path.push(file_name);
-                                    debug!(logger, "Writing asset {:?} as {:?}", uri, path);
-                                    ::std::fs::File::create(&path)
-                                        .and_then(|mut file| file.write_all(&bytes))
-                                        .map(|_| ())
-                                        .map_err(Error::from)
-                                } else {
-                                    Ok(())
-                                }
-                            })
+        // Download the assets and save them in the temporary directory
+        let files_written = {
+            let logger = logger.clone();
+            let temp_dir_path = temp_dir_path.clone();
+            let handle = handle.clone();
+            written_template_path.and_then(move |_| {
+                debug!(logger, "Downloading assets {:?}", assets_urls);
+                let futures = assets_urls.into_iter().map(move |uri| {
+                    let logger = logger.clone();
+                    let mut path = temp_dir_path.clone();
+
+                    let response = Client::configure()
+                        .connector(https_connector(&handle))
+                        .build(&handle)
+                        .get_follow_redirect(&uri.0);
+
+                    let body = response.and_then(|res| {
+                            let filename = res.filename();
+                            res.get_body_bytes().map(|bytes| (bytes, filename))
                     });
-                    future::join_all(futures).map(|result| (context, template_path, result))
-                })
 
-                // Then run latex
-                .and_then(move |(context, template_path, _)| {
-                    let inner_handle = context.handle.clone();
-                    Command::new("xelatex")
-                        .current_dir(&context.temp_dir_path)
-                        .arg("-interaction=nonstopmode")
-                        .arg("-file-line-error")
-                        .arg("-shell-restricted")
-                        .arg(template_path.clone())
-                        .output_async(&inner_handle)
-                        .map(|output| (context, output))
-                        .map_err(Error::from)
-                }).and_then(|(context, output)| {
-                    let stdout = String::from_utf8(output.stdout).unwrap();
-                    if output.status.success() {
-                        debug!(context.logger, "{}", stdout);
-                        Ok(context)
-                    } else {
-                        Err(ErrorKind::LatexFailed(stdout).into())
-                    }
-                })
-
-                // Then construct the path to the generated PDF
-                .map(move |context| {
-                    let mut path = context.temp_dir_path.clone();
-                    path.push(Path::new(&output_file_name));
-                    (context, path)
-                })
-
-                // Then get a multipart request from the generated PDF
-                .and_then(move |(context, pdf_path)| {
-                    debug!(context.logger, "Reading the pdf from {:?}", pdf_path);
-                    debug!(context.logger, "Sending generated PDF to {}", callback_url.0);
-                    multipart_request_with_file(
-                        Request::new(hyper::Method::Post, callback_url.0),
-                        pdf_path
-                    ).map(|r| (context, r))
-                })
-
-                // Finally, post the PDF to the callback URL
-                .and_then(move |(context, request)| {
-                    // Avoid dir being dropped early
-                    let _dir = dir;
-                    Client::configure()
-                        .connector(https_connector(&context.handle.clone()))
-                        .build(&context.handle.clone())
-                        .request(request)
-                        .map(|response| (context, response))
-                        .map_err(Error::from)
-                }).and_then(|(context, response)| {
-                    info!(
-                        context.logger,
-                        "Callback response: {}",
-                        response.status().canonical_reason().unwrap_or("unknown")
-                    );
-
-                    response
-                        .get_body_bytes()
-                        .map(|bytes| (context, bytes))
-
-                }).and_then(|(context, bytes)| {
-                    debug!(
-                        context.logger,
-                        "Callback response body: {:?}",
-                        ::std::str::from_utf8(&bytes).unwrap_or("<binary content>")
-                    );
-                    future::ok(())
-                })
-
-                // Report errors to the callback url
-                .or_else(move |error| {
-                    error!(error_logger, format!("{}", error));
-                    let req = Request::new(hyper::Method::Post, error_path_callback_url);
-                    Client::new(&error_path_handle)
-                        .request(multipart_request_with_error(req, &error).unwrap())
-                        .map(|_| ())
+                    body.and_then(move |(bytes, filename)| {
+                        let filename = filename.or_else(|| extract_filename_from_uri(&uri.0));
+                        match filename {
+                            Some(filename) => {
+                                path.push(filename);
+                                debug!(logger, "Writing asset {:?} as {:?}", uri, path);
+                                ::std::fs::File::create(&path)
+                                    .and_then(|mut file| file.write_all(&bytes))
+                                    .map_err(Error::from)
+                            },
+                            _ => Ok(())
+                        }
+                    })
                 });
+                future::join_all(futures)
+            })
+        };
 
-        Box::new(work.map_err(|_| ()))
+        // Then run latex
+        let latex_out = {
+            let handle = handle.clone();
+            let template_path = template_path.clone();
+            let temp_dir_path = temp_dir_path.clone();
+            files_written.and_then(move |_| {
+                Command::new("xelatex")
+                    .current_dir(&temp_dir_path)
+                    .arg("-interaction=nonstopmode")
+                    .arg("-file-line-error")
+                    .arg("-shell-restricted")
+                    .arg(template_path)
+                    .output_async(&handle)
+                    .map_err(Error::from)
+            })
+        };
+
+        let output_path = {
+            let logger = logger.clone();
+            let temp_dir_path = temp_dir_path.clone();
+            latex_out.and_then(move |output| {
+                let stdout = String::from_utf8(output.stdout).unwrap();
+                if output.status.success() {
+                    debug!(logger, "{}", stdout);
+                    Ok(())
+                } else {
+                    Err(ErrorKind::LatexFailed(stdout).into())
+                }
+            }).map(move |_| {
+                // Construct the path to the generated PDF
+                let mut path = temp_dir_path;
+                path.push(Path::new(&output_filename));
+                path
+            })
+        };
+
+        // Then post a multipart request from the generated PDF
+        let callback_response = {
+            let logger = logger.clone();
+            let handle = handle.clone();
+            let callback_url = callback_url.clone();
+            output_path.and_then(move |pdf_path| {
+                debug!(logger, "Reading the pdf from {:?}", pdf_path);
+                debug!(logger, "Sending generated PDF to {}", callback_url.0);
+                multipart_request_with_file(Request::new(hyper::Method::Post, callback_url.0), pdf_path)
+            }).and_then(move |req| {
+                // Avoid dir being dropped early
+                let _dir = dir;
+
+                Client::configure()
+                    .connector(https_connector(&handle))
+                    .build(&handle)
+                    .request(req)
+                    .map_err(Error::from)
+            })
+        };
+
+        let response_bytes = {
+            let logger = logger.clone();
+            callback_response.and_then(move |response| {
+                info!(
+                    logger,
+                    "Callback response: {}",
+                    response.status().canonical_reason().unwrap_or("unknown"));
+
+                response.get_body_bytes()
+            })
+        };
+
+        let res = {
+            let logger = logger.clone();
+            response_bytes.and_then(move |bytes| {
+                debug!(
+                    logger,
+                    "Callback response body: {:?}",
+                    ::std::str::from_utf8(&bytes).unwrap_or("<binary content>"));
+                future::ok(())
+            })
+        };
+
+        // Report errors to the callback url
+        let handle_errors = {
+            let logger = logger.clone();
+            res.or_else(move |error| {
+                error!(logger, format!("{}", error));
+                let req = Request::new(hyper::Method::Post, callback_url.0);
+                Client::new(&handle)
+                    .request(multipart_request_with_error(req, &error).unwrap())
+                    .map(|_| ())
+            })
+        };
+
+        Box::new(handle_errors.map_err(|_| ()))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use hyper::Uri;
-    use super::extract_file_name_from_uri;
+    use super::extract_filename_from_uri;
 
     #[test]
-    fn test_extract_file_name_from_uri_works() {
+    fn test_extract_filename_from_uri_works() {
         let assert_extracted = |input: &'static str, expected_output: Option<&'static str>| {
             let uri = input.parse::<Uri>().unwrap();
-            assert_eq!(extract_file_name_from_uri(&uri), expected_output.map(|o| o.to_string()));
+            assert_eq!(extract_filename_from_uri(&uri), expected_output.map(|o| o.to_string()));
         };
 
         assert_extracted("/logo.png", Some("logo.png"));
