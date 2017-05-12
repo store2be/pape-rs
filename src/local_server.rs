@@ -118,18 +118,18 @@ fn main() {
     let assets: Vec<PapersUri> = ::std::fs::read_dir(::std::path::Path::new("."))
         .unwrap()
         .map(|entry| entry.unwrap())
-        .filter(|entry| entry.file_name().to_str().unwrap() != "template.tex")
+        .filter(|entry| entry.filename().to_str().unwrap() != "template.tex")
         .map(|entry| {
-            let file_name = entry.file_name();
-            let file_name = file_name.to_str().unwrap();
-            PapersUri(format!("http://127.0.0.1:8733/{}", file_name).parse().unwrap())
+            let filename = entry.filename();
+            let filename = filename.to_str().unwrap();
+            PapersUri(format!("http://127.0.0.1:8733/{}", filename).parse().unwrap())
         })
         .collect();
 
     let document_spec = DocumentSpec {
         assets_urls: assets,
         callback_url: PapersUri("http://127.0.0.1:8733/callback".parse().unwrap()),
-        output_file_name: "out.pdf".to_string(),
+        output_filename: "out.pdf".to_string(),
         template_url: PapersUri("http://127.0.0.1:8733/template.tex".parse().unwrap()),
         variables: variables,
     };

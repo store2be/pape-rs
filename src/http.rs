@@ -60,12 +60,12 @@ impl ServerRequestExt for server::Request {
 }
 
 pub trait ResponseExt {
-    fn file_name(&self) -> Option<String>;
+    fn filename(&self) -> Option<String>;
     fn get_body_bytes(self) -> Box<Future<Item=Vec<u8>, Error=Error>>;
 }
 
 impl ResponseExt for Response {
-    fn file_name(&self) -> Option<String> {
+    fn filename(&self) -> Option<String> {
         match self.headers().get::<ContentDisposition>() {
             Some(&ContentDisposition { parameters: ref params, .. }) => {
                 params.iter().find(|param| match **param {
@@ -257,7 +257,7 @@ mod tests {
 
 
     #[test]
-    fn test_file_name_prefers_content_disposition() {
+    fn test_filename_prefers_content_disposition() {
         let _join = MockServer::respond_to_logo_png_with(hyper::header::ContentDisposition {
             disposition: hyper::header::DispositionType::Attachment,
             parameters: vec![hyper::header::DispositionParam::Filename(
@@ -276,11 +276,11 @@ mod tests {
         let work = client.request(request);
 
         let response = core.run(work).unwrap();
-        assert_eq!(response.file_name(), Some("this_should_be_the_filename.png".to_string()))
+        assert_eq!(response.filename(), Some("this_should_be_the_filename.png".to_string()))
     }
 
     #[test]
-    fn test_file_name_works_with_content_disposition_inline() {
+    fn test_filename_works_with_content_disposition_inline() {
         let _join = MockServer::respond_to_logo_png_with(hyper::header::ContentDisposition {
             disposition: hyper::header::DispositionType::Inline,
             parameters: vec![hyper::header::DispositionParam::Filename(
@@ -299,7 +299,7 @@ mod tests {
         let work = client.request(request);
 
         let response = core.run(work).unwrap();
-        assert_eq!(response.file_name(), Some("this_should_be_the_filename.png".to_string()))
+        assert_eq!(response.filename(), Some("this_should_be_the_filename.png".to_string()))
     }
 
     // S3 returns Content-Disposition without disposition (just filename)
@@ -324,6 +324,6 @@ mod tests {
         let work = client.request(request);
 
         let response = core.run(work).unwrap();
-        assert_eq!(response.file_name(), Some("this_should_be_the_filename.png".to_string()))
+        assert_eq!(response.filename(), Some("this_should_be_the_filename.png".to_string()))
     }
 }
