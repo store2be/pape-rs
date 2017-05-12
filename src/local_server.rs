@@ -118,9 +118,9 @@ fn main() {
     let assets: Vec<PapersUri> = ::std::fs::read_dir(::std::path::Path::new("."))
         .unwrap()
         .map(|entry| entry.unwrap())
-        .filter(|entry| entry.filename().to_str().unwrap() != "template.tex")
+        .filter(|entry| entry.file_name().to_str().unwrap() != "template.tex")
         .map(|entry| {
-            let filename = entry.filename();
+            let filename = entry.file_name();
             let filename = filename.to_str().unwrap();
             PapersUri(format!("http://127.0.0.1:8733/{}", filename).parse().unwrap())
         })
