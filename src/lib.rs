@@ -24,5 +24,5 @@ extern crate tokio_process;
 pub mod error;
 pub mod http;
 pub mod papers;
-mod workspace;
+mod renderer;
 pub mod server;

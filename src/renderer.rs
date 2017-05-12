@@ -16,7 +16,7 @@ use http::*;
 use papers::DocumentSpec;
 use error::{Error, ErrorKind};
 
-pub struct Workspace {
+pub struct Renderer {
     dir: Temp,
     document_spec: DocumentSpec,
     handle: Handle,
@@ -24,14 +24,13 @@ pub struct Workspace {
     logger: slog::Logger,
 }
 
-struct WorkspaceContext {
+struct RendererContext {
     handle: Handle,
     logger: slog::Logger,
     temp_dir_path: ::std::path::PathBuf,
 }
 
 /// We ignore file names that end with a slash for now, and always determine the file name from the Uri
-/// TODO: investigate Content-Disposition: attachment
 fn extract_file_name_from_uri(uri: &Uri) -> Option<String> {
     match uri.path().split('/').last() {
         Some(name) => {
@@ -48,13 +47,13 @@ fn extract_file_name_from_uri(uri: &Uri) -> Option<String> {
 /// Since `mktemp::Temp` implements Drop by deleting the directory, we don't need to worry about
 /// leaving files or directories behind. On the flipside, we must ensure it is not dropped before
 /// the last returned future that needs the directory finishes.
-impl Workspace {
+impl Renderer {
 
-    pub fn new(remote: Remote, document_spec: DocumentSpec, logger: slog::Logger) -> Result<Workspace, Error> {
+    pub fn new(remote: Remote, document_spec: DocumentSpec, logger: slog::Logger) -> Result<Renderer, Error> {
         let dir = Temp::new_dir()?;
         let mut template_path = dir.to_path_buf();
         template_path.push(Path::new(&document_spec.output_file_name.replace("pdf", "tex")));
-        Ok(Workspace {
+        Ok(Renderer {
             document_spec,
             handle: remote.handle().unwrap(),
             template_path,
@@ -63,36 +62,29 @@ impl Workspace {
         })
     }
 
+    fn get_template(&self) -> Box<Future<Item=hyper::client::Response, Error=Error>> {
+        Client::configure()
+            .connector(https_connector(&self.handle.clone()))
+            .build(&self.handle.clone())
+            .get_follow_redirect(&self.document_spec.template_url.0.clone())
+    }
+
     pub fn preview(self) -> Box<Future<Item=String, Error=Error>> {
-        let Workspace {
-            handle,
-            document_spec,
-            ..
-        } = self;
-
-        let DocumentSpec {
-            template_url,
-            variables,
-            ..
-        } = document_spec;
-
-        // Download the template and populate it
-        let work = Client::configure()
-            .connector(https_connector(&handle.clone()))
-            .build(&handle.clone())
-            .get_follow_redirect(&template_url.0)
-            .and_then(|res| res.get_body_bytes())
-            .and_then(|bytes| {
-                ::std::string::String::from_utf8(bytes).map_err(Error::from)
-            }).and_then(move |template_string| {
-                Tera::one_off(&template_string, &variables, false).map_err(Error::from)
-            });
-
-        Box::new(work)
+        let response = self.get_template();
+        let Renderer { document_spec, ..  } = self;
+        let DocumentSpec { variables, ..  } = document_spec;
+        let bytes = response.and_then(|res| res.get_body_bytes());
+        let template_string = bytes.and_then(|bytes| ::std::string::String::from_utf8(bytes).map_err(Error::from));
+        let rendered = template_string.and_then(move |template_string| {
+            Tera::one_off(&template_string, &variables, false).map_err(Error::from)
+        });
+        Box::new(rendered)
     }
 
     pub fn execute(self) -> Box<Future<Item=(), Error=()>> {
-        let Workspace {
+        let res = self.get_template();
+
+        let Renderer {
             handle,
             document_spec,
             template_path,
@@ -105,14 +97,14 @@ impl Workspace {
         let DocumentSpec {
             assets_urls,
             callback_url,
-            template_url,
             output_file_name,
             variables,
+            ..
         } = document_spec;
 
-        debug!(logger, "Starting Workspace worker");
+        debug!(logger, "Starting Renderer worker");
 
-        let context = WorkspaceContext {
+        let context = RendererContext {
             handle,
             logger,
             temp_dir_path: dir.to_path_buf(),
@@ -123,11 +115,7 @@ impl Workspace {
         let error_path_callback_url = callback_url.0.clone();
 
         // First download the template and populate it
-        let work = Client::configure()
-            .connector(https_connector(&context.handle.clone()))
-            .build(&context.handle.clone())
-            .get_follow_redirect(&template_url.0)
-            .and_then(|res| res.get_body_bytes())
+        let work = res.and_then(|res| res.get_body_bytes())
             .and_then(|bytes| {
                 debug!(context.logger, "Successfully downloaded the template");
                 String::from_utf8(bytes)

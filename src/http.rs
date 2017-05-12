@@ -67,7 +67,7 @@ pub trait ResponseExt {
 impl ResponseExt for Response {
     fn file_name(&self) -> Option<String> {
         match self.headers().get::<ContentDisposition>() {
-            Some(&ContentDisposition { disposition: _, parameters: ref params }) => {
+            Some(&ContentDisposition { parameters: ref params, .. }) => {
                 params.iter().find(|param| match **param {
                     DispositionParam::Filename(_, _, _) => true,
                     _ => false
