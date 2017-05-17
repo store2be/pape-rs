@@ -70,28 +70,30 @@ impl Papers {
             return Box::new(err(ErrorKind::UnprocessableEntity.into()));
         }
 
-        let remote = self.remote.clone();
         let handle = self.remote.handle().unwrap().clone();
-        let logger = self.logger.clone();
 
-        let response = req.get_body_bytes()
+        let response = req.get_body_bytes();
 
-        // Parse the body into a DocumentSpec
-        .and_then(|body| {
-            result(
-                serde_json::from_slice::<DocumentSpec>(body.as_slice())
-                    .map_err(|err| Error::with_chain(err, ErrorKind::UnprocessableEntity))
-            )
-        })
+        let document_spec = response.and_then(|body| {
+            result(serde_json::from_slice::<DocumentSpec>(body.as_slice())
+                .map_err(|err| Error::with_chain(err, ErrorKind::UnprocessableEntity)))
+        });
 
-        // Handle the parsed request
-        .map_err(|_| ErrorKind::InternalServerError.into())
-        .and_then(|document_spec| {
-            result(Renderer::new(remote, document_spec, logger))
-        }).and_then(move |renderer| {
-            handle.spawn(renderer.execute());
-            ok(Response::new().with_status(StatusCode::Ok))
-        }).map_err(|_| ErrorKind::InternalServerError.into());
+        let renderer = {
+            let logger = self.logger.clone();
+            let handle = handle.clone();
+            document_spec.and_then(|document_spec| {
+                result(Renderer::new(handle, document_spec, logger))
+            })
+        };
+
+        let response = {
+            let handle = handle.clone();
+            renderer.and_then(move |renderer| {
+                handle.spawn(renderer.execute());
+                ok(Response::new().with_status(StatusCode::Ok))
+            }).map_err(|_| ErrorKind::InternalServerError.into())
+        };
 
         Box::new(response)
     }
@@ -108,27 +110,26 @@ impl Papers {
             return Box::new(err(ErrorKind::UnprocessableEntity.into()));
         }
 
-        let remote = self.remote.clone();
+        let handle = self.remote.handle().unwrap();
         let logger = self.logger.clone();
 
-        let response = req.get_body_bytes()
-
-        // Parse the body into a DocumentSpec
-        .and_then(|body| {
+        let response = req.get_body_bytes();
+        let document_spec = response.and_then(|body| {
             result(
                 serde_json::from_slice::<DocumentSpec>(body.as_slice())
-                    .map_err(|_| ErrorKind::UnprocessableEntity.into())
-            )
-        })
-
-        // Handle the parsed request
-        .and_then(|document_spec| {
-            result(Renderer::new(remote, document_spec, logger))
+                .map_err(|_| ErrorKind::UnprocessableEntity.into())
+                )
+        });
+        let renderer = document_spec.and_then(|document_spec| {
+            result(Renderer::new(handle, document_spec, logger))
                 .map_err(|err| Error::with_chain(err, ErrorKind::InternalServerError))
-        })
-        .and_then(|renderer| {
+        });
+
+        let preview = renderer.and_then(|renderer| {
             renderer.preview()
-        }).and_then(|populated_template| {
+        });
+
+        let response = preview.and_then(|populated_template| {
             ok(Response::new()
                 .with_status(StatusCode::Ok)
                 .with_body(populated_template))

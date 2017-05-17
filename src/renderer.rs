@@ -8,7 +8,7 @@ use slog;
 use std::io::prelude::*;
 use std::path::Path;
 use std::process::Command;
-use tokio_core::reactor::{Handle, Remote};
+use tokio_core::reactor::Handle;
 use tokio_process::CommandExt;
 use tera::Tera;
 
@@ -42,16 +42,16 @@ fn extract_filename_from_uri(uri: &Uri) -> Option<String> {
 // the last returned future that needs the directory finishes.
 impl Renderer {
 
-    pub fn new(remote: Remote, document_spec: DocumentSpec, logger: slog::Logger) -> Result<Renderer, Error> {
+    pub fn new(handle: Handle, document_spec: DocumentSpec, logger: slog::Logger) -> Result<Renderer, Error> {
         let dir = Temp::new_dir()?;
         let mut template_path = dir.to_path_buf();
         template_path.push(Path::new(&document_spec.output_filename.replace("pdf", "tex")));
         Ok(Renderer {
-            document_spec,
-            handle: remote.handle().unwrap(),
-            template_path,
             dir,
+            document_spec,
+            handle,
             logger,
+            template_path,
         })
     }
 
