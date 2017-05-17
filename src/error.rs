@@ -1,6 +1,6 @@
 use hyper;
 use hyper::server::Response;
-use hyper::{StatusCode};
+use hyper::StatusCode;
 use tera;
 
 error_chain! {
@@ -43,14 +43,16 @@ error_chain! {
 impl Error {
     pub fn into_response(self) -> Response {
         match self {
-            Error(ErrorKind::UnprocessableEntity, _) => Response::new().with_status(StatusCode::UnprocessableEntity),
+            Error(ErrorKind::UnprocessableEntity, _) => {
+                Response::new().with_status(StatusCode::UnprocessableEntity)
+            }
             Error(ErrorKind::Forbidden, _) => Response::new().with_status(StatusCode::Forbidden),
-            Error(ErrorKind::InternalServerError, _) => Response::new().with_status(StatusCode::InternalServerError),
-            Error(ErrorKind::Tera(_), _)
-            | Error(ErrorKind::UriError(_), _)
-            | Error(ErrorKind::Hyper(_), _) => {
+            Error(ErrorKind::InternalServerError, _) |
+            Error(ErrorKind::Tera(_), _) |
+            Error(ErrorKind::UriError(_), _) |
+            Error(ErrorKind::Hyper(_), _) => {
                 Response::new().with_status(StatusCode::InternalServerError)
-            },
+            }
             _ => unreachable!(),
         }
     }

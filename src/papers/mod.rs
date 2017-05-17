@@ -48,7 +48,7 @@ impl Papers {
                 if self.auth != "" && header_bearer.token != self.auth {
                     return Err(Error::from_kind(ErrorKind::Forbidden));
                 }
-            },
+            }
             None => {
                 if self.auth != "" {
                     return Err(Error::from_kind(ErrorKind::Forbidden));
@@ -58,15 +58,15 @@ impl Papers {
         Ok(())
     }
 
-    fn submit(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
+    fn submit(&self, req: Request) -> Box<Future<Item = Response, Error = Error>> {
         log_request(&self.logger, &req);
         debug!(self.logger, "{:#?}", req);
 
         if let Err(error) = self.check_auth_header(&req) {
-            return Box::new(err(error))
+            return Box::new(err(error));
         }
 
-        if !req.has_content_type(mime!(Application/Json)) {
+        if !req.has_content_type(mime!(Application / Json)) {
             return Box::new(err(ErrorKind::UnprocessableEntity.into()));
         }
 
@@ -76,37 +76,38 @@ impl Papers {
 
         let document_spec = response.and_then(|body| {
             result(serde_json::from_slice::<DocumentSpec>(body.as_slice())
-                .map_err(|err| Error::with_chain(err, ErrorKind::UnprocessableEntity)))
+                       .map_err(|err| Error::with_chain(err, ErrorKind::UnprocessableEntity)))
         });
 
         let renderer = {
             let logger = self.logger.clone();
             let handle = handle.clone();
-            document_spec.and_then(|document_spec| {
-                result(Renderer::new(handle, document_spec, logger))
-            })
+            document_spec
+                .and_then(|document_spec| result(Renderer::new(handle, document_spec, logger)))
         };
 
         let response = {
             let handle = handle.clone();
-            renderer.and_then(move |renderer| {
-                handle.spawn(renderer.execute());
-                ok(Response::new().with_status(StatusCode::Ok))
-            }).map_err(|_| ErrorKind::InternalServerError.into())
+            renderer
+                .and_then(move |renderer| {
+                              handle.spawn(renderer.execute());
+                              ok(Response::new().with_status(StatusCode::Ok))
+                          })
+                .map_err(|_| ErrorKind::InternalServerError.into())
         };
 
         Box::new(response)
     }
 
-    fn preview(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
+    fn preview(&self, req: Request) -> Box<Future<Item = Response, Error = Error>> {
         log_request(&self.logger, &req);
         debug!(self.logger, "{:#?}", req);
 
         if let Err(error) = self.check_auth_header(&req) {
-            return Box::new(err(error))
+            return Box::new(err(error));
         }
 
-        if !req.has_content_type(mime!(Application/Json)) {
+        if !req.has_content_type(mime!(Application / Json)) {
             return Box::new(err(ErrorKind::UnprocessableEntity.into()));
         }
 
@@ -115,31 +116,30 @@ impl Papers {
 
         let response = req.get_body_bytes();
         let document_spec = response.and_then(|body| {
-            result(
-                serde_json::from_slice::<DocumentSpec>(body.as_slice())
-                .map_err(|_| ErrorKind::UnprocessableEntity.into())
-                )
+            result(serde_json::from_slice::<DocumentSpec>(body.as_slice())
+                       .map_err(|_| ErrorKind::UnprocessableEntity.into()))
         });
-        let renderer = document_spec.and_then(|document_spec| {
-            result(Renderer::new(handle, document_spec, logger))
-                .map_err(|err| Error::with_chain(err, ErrorKind::InternalServerError))
-        });
+        let renderer =
+            document_spec.and_then(|document_spec| {
+                                       result(Renderer::new(handle, document_spec, logger))
+                                           .map_err(|err| {
+                    Error::with_chain(err, ErrorKind::InternalServerError)
+                })
+                                   });
 
-        let preview = renderer.and_then(|renderer| {
-            renderer.preview()
-        });
+        let preview = renderer.and_then(|renderer| renderer.preview());
 
         let response = preview.and_then(|populated_template| {
-            ok(Response::new()
-                .with_status(StatusCode::Ok)
-                .with_body(populated_template))
-        });
+                                            ok(Response::new()
+                                                   .with_status(StatusCode::Ok)
+                                                   .with_body(populated_template))
+                                        });
 
         Box::new(response)
 
     }
 
-    fn health_check(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
+    fn health_check(&self, req: Request) -> Box<Future<Item = Response, Error = Error>> {
         log_request(&self.logger, &req);
         Box::new(ok(Response::new().with_status(StatusCode::Ok)))
     }
@@ -149,23 +149,23 @@ impl Service for Papers {
     type Request = Request;
     type Response = Response;
     type Error = hyper::Error;
-    type Future = Box<Future<Item=Response, Error=hyper::Error>>;
+    type Future = Box<Future<Item = Response, Error = hyper::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
         let response = match (req.method(), req.path()) {
-            (&Get, "/healthz") | (&Head, "/healthz") => self.health_check(req),
-            (&Post, "/preview") => self.preview(req),
-            (&Post, "/submit") => self.submit(req),
-            _ => {
-                log_request(&self.logger, &req);
-                Box::new(ok(Response::new().with_status(StatusCode::NotFound)))
+                (&Get, "/healthz") |
+                (&Head, "/healthz") => self.health_check(req),
+                (&Post, "/preview") => self.preview(req),
+                (&Post, "/submit") => self.submit(req),
+                _ => {
+                    log_request(&self.logger, &req);
+                    Box::new(ok(Response::new().with_status(StatusCode::NotFound)))
+                }
             }
-        }.then(|handler_result| {
-            match handler_result {
-                Ok(response) => ok(response),
-                Err(err) => ok(err.into_response()),
-            }
-        });
+            .then(|handler_result| match handler_result {
+                      Ok(response) => ok(response),
+                      Err(err) => ok(err.into_response()),
+                  });
 
         Box::new(response)
     }
@@ -179,9 +179,9 @@ impl NewService for Papers {
 
     fn new_service(&self) -> Result<Self::Instance, ::std::io::Error> {
         Ok(Papers {
-            auth: self.auth.clone(),
-            remote: self.remote.clone(),
-            logger: self.logger.clone(),
-        })
+               auth: self.auth.clone(),
+               remote: self.remote.clone(),
+               logger: self.logger.clone(),
+           })
     }
 }

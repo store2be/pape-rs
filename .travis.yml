@@ -4,6 +4,11 @@ rust:
   - beta
   - nightly
 cache: cargo
-matrix:
-  allow_failures:
-    - rust: nightly
+before_script:
+  - (cargo install rustfmt || true)
+  - if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then (cargo install clippy --force) fi
+script:
+  - cargo fmt -- --write-mode=diff
+  - if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then (cargo clippy) fi
+  - cargo build
+  - cargo test
