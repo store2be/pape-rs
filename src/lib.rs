@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 extern crate chrono;
 #[macro_use]
 extern crate error_chain;

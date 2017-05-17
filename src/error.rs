@@ -47,9 +47,7 @@ impl Error {
                 Response::new().with_status(StatusCode::UnprocessableEntity)
             }
             Error(ErrorKind::Forbidden, _) => Response::new().with_status(StatusCode::Forbidden),
-            Error(ErrorKind::InternalServerError, _) => {
-                Response::new().with_status(StatusCode::InternalServerError)
-            }
+            Error(ErrorKind::InternalServerError, _) |
             Error(ErrorKind::Tera(_), _) |
             Error(ErrorKind::UriError(_), _) |
             Error(ErrorKind::Hyper(_), _) => {
