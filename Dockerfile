@@ -14,6 +14,6 @@ ENV OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu/
 
 WORKDIR /papers
 
-COPY target/release/papers-server .
+COPY papers-server .
 
 CMD ./papers-server
