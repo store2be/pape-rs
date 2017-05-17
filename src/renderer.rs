@@ -8,7 +8,7 @@ use slog;
 use std::io::prelude::*;
 use std::path::Path;
 use std::process::Command;
-use tokio_core::reactor::Handle;
+use tokio_core::reactor::{Remote, Handle};
 use tokio_process::CommandExt;
 use tera::Tera;
 
@@ -19,6 +19,7 @@ use error::{Error, ErrorKind};
 pub struct Renderer {
     dir: Temp,
     document_spec: DocumentSpec,
+    max_asset_size: u32,
     handle: Handle,
     template_path: ::std::path::PathBuf,
     logger: slog::Logger,
@@ -41,20 +42,18 @@ fn extract_filename_from_uri(uri: &Uri) -> Option<String> {
 // leaving files or directories behind. On the flipside, we must ensure it is not dropped before
 // the last returned future that needs the directory finishes.
 impl Renderer {
-    pub fn new(handle: Handle,
-               document_spec: DocumentSpec,
-               logger: slog::Logger)
-               -> Result<Renderer, Error> {
+    pub fn new(remote: Remote, max_asset_size: u32, document_spec: DocumentSpec, logger: slog::Logger) -> Result<Renderer, Error> {
         let dir = Temp::new_dir()?;
         let mut template_path = dir.to_path_buf();
         template_path.push(Path::new(&document_spec.output_filename.replace("pdf", "tex")));
         Ok(Renderer {
-               dir,
-               document_spec,
-               handle,
-               logger,
-               template_path,
-           })
+            document_spec,
+            handle: remote.handle().unwrap(),
+            template_path,
+            dir,
+            logger,
+            max_asset_size,
+        })
     }
 
     fn get_template(&self) -> Box<Future<Item = hyper::client::Response, Error = Error>> {
@@ -66,16 +65,13 @@ impl Renderer {
 
     pub fn preview(self) -> Box<Future<Item = String, Error = Error>> {
         let response = self.get_template();
-        let Renderer { document_spec, .. } = self;
-        let DocumentSpec { variables, .. } = document_spec;
-        let bytes = response.and_then(|res| res.get_body_bytes());
-        let template_string =
-            bytes.and_then(|bytes| ::std::string::String::from_utf8(bytes).map_err(Error::from));
-        let rendered =
-            template_string.and_then(move |template_string| {
-                                         Tera::one_off(&template_string, &variables, false)
-                                             .map_err(Error::from)
-                                     });
+        let Renderer { document_spec, max_asset_size, ..  } = self;
+        let DocumentSpec { variables, ..  } = document_spec;
+        let bytes = response.and_then(move |res| res.get_body_bytes_limit(max_asset_size));
+        let template_string = bytes.and_then(|bytes| ::std::string::String::from_utf8(bytes).map_err(Error::from));
+        let rendered = template_string.and_then(move |template_string| {
+            Tera::one_off(&template_string, &variables, false).map_err(Error::from)
+        });
         Box::new(rendered)
     }
 
@@ -83,11 +79,12 @@ impl Renderer {
         let res = self.get_template();
 
         let Renderer {
-            handle,
-            document_spec,
-            template_path,
             dir,
+            document_spec,
+            handle,
             logger,
+            max_asset_size,
+            template_path,
         } = self;
 
         debug!(logger,
@@ -107,7 +104,7 @@ impl Renderer {
         let temp_dir_path = dir.to_path_buf();
 
         // First download the template and populate it
-        let bytes = res.and_then(|res| res.get_body_bytes());
+        let bytes = res.and_then(move |res| res.get_body_bytes_limit(max_asset_size));
 
         let template_string = {
             let logger = logger.clone();
@@ -143,42 +140,36 @@ impl Renderer {
             let logger = logger.clone();
             let temp_dir_path = temp_dir_path.clone();
             let handle = handle.clone();
+            let max_asset_size = max_asset_size;
             written_template_path.and_then(move |_| {
                 debug!(logger, "Downloading assets {:?}", assets_urls);
-                let futures = assets_urls
-                    .into_iter()
-                    .map(move |uri| {
-                        let logger = logger.clone();
-                        let mut path = temp_dir_path.clone();
+                let futures = assets_urls.into_iter().map(move |uri| {
+                    let logger = logger.clone();
+                    let mut path = temp_dir_path.clone();
 
-                        let response = Client::configure()
-                            .connector(https_connector(&handle))
-                            .build(&handle)
-                            .get_follow_redirect(&uri.0);
+                    let response = Client::configure()
+                        .connector(https_connector(&handle))
+                        .build(&handle)
+                        .get_follow_redirect(&uri.0);
 
-                        let body = response.and_then(|res| {
-                                                         let filename = res.filename();
-                                                         res.get_body_bytes().map(|bytes| {
-                                                                                      (bytes,
-                                                                                       filename)
-                                                                                  })
-                                                     });
-
-                        body.and_then(move |(bytes, filename)| {
-                            let filename =
-                                filename.or_else(|| extract_filename_from_uri(&uri.0));
-                            match filename {
-                                Some(filename) => {
-                                    path.push(filename);
-                                    debug!(logger, "Writing asset {:?} as {:?}", uri, path);
-                                    ::std::fs::File::create(&path)
-                                        .and_then(|mut file| file.write_all(&bytes))
-                                        .map_err(Error::from)
-                                }
-                                _ => Ok(()),
-                            }
-                        })
+                    let body = response.and_then(move |res| {
+                            let filename = res.filename();
+                            res.get_body_bytes_limit(max_asset_size).map(|bytes| (bytes, filename))
                     });
+                    body.and_then(move |(bytes, filename)| {
+                        let filename = filename.or_else(|| extract_filename_from_uri(&uri.0));
+                        match filename {
+                            Some(filename) => {
+                                path.push(filename);
+                                debug!(logger, "Writing asset {:?} as {:?}", uri, path);
+                                ::std::fs::File::create(&path)
+                                    .and_then(|mut file| file.write_all(&bytes))
+                                    .map_err(Error::from)
+                            }
+                            _ => Ok(()),
+                        }
+                    })
+                });
                 future::join_all(futures)
             })
         };
@@ -248,12 +239,13 @@ impl Renderer {
 
         let response_bytes = {
             let logger = logger.clone();
+            let max_asset_size = max_asset_size;
             callback_response.and_then(move |response| {
                 info!(logger,
                       "Callback response: {}",
                       response.status().canonical_reason().unwrap_or("unknown"));
 
-                response.get_body_bytes()
+                response.get_body_bytes_limit(max_asset_size)
             })
         };
 

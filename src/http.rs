@@ -63,10 +63,23 @@ impl ServerRequestExt for server::Request {
 
 pub trait ResponseExt {
     fn filename(&self) -> Option<String>;
-    fn get_body_bytes(self) -> Box<Future<Item = Vec<u8>, Error = Error>>;
+    fn get_body_bytes(self) -> Box<Future<Item=Vec<u8>, Error=Error>>;
+    fn get_body_bytes_limit(self, limit: u32) -> Box<Future<Item=Vec<u8>, Error=Error>>;
 }
 
 impl ResponseExt for Response {
+    fn get_body_bytes_limit(self, limit: u32) -> Box<Future<Item=Vec<u8>, Error=Error>> {
+        Box::new(self.body().from_err().fold(Vec::<u8>::new(), move |mut acc, chunk| {
+
+            if (acc.len() + chunk.len()) > limit as usize {
+                return future::err(ErrorKind::UnprocessableEntity.into())
+            }
+
+            acc.extend_from_slice(&chunk);
+            future::ok::<_, Error>(acc)
+        }))
+    }
+
     fn filename(&self) -> Option<String> {
         match self.headers().get::<ContentDisposition>() {
             Some(&ContentDisposition { parameters: ref params, .. }) => {
@@ -330,5 +343,47 @@ mod tests {
         let response = core.run(work).unwrap();
         assert_eq!(response.filename(),
                    Some("this_should_be_the_filename.png".to_string()))
+    }
+
+    struct MockFileServer;
+
+    impl Service for MockFileServer {
+        type Request = server::Request;
+        type Response = server::Response;
+        type Error = hyper::Error;
+        type Future = Box<Future<Item=server::Response, Error=hyper::Error>>;
+
+        fn call(&self, _: Self::Request) -> Self::Future {
+            let mut response_body: Vec<u8> = Vec::with_capacity(3000);
+
+            for n in 0 .. 3000 {
+                response_body.push((n / 250) as u8);
+            }
+
+            let res = server::Response::new().with_body(response_body);
+            Box::new(future::ok(res))
+        }
+    }
+
+    #[test]
+    fn test_get_body_bytes_limit_is_enforced() {
+        let request = Request::new(hyper::Method::Get, "/".parse().unwrap());
+        let response = MockFileServer.call(request).wait().unwrap();
+        let result = response.get_body_bytes_limit(2000).wait();
+        match result {
+            Err(Error(ErrorKind::UnprocessableEntity, _)) => (),
+            other => panic!("Wrong result to get_body_bytes_max_size: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_get_body_bytes_limit_is_not_excessively_zealous() {
+        let request = Request::new(hyper::Method::Get, "/".parse().unwrap());
+        let response = MockFileServer.call(request).wait().unwrap();
+        let result = response.get_body_bytes_limit(3000).wait();
+        match result {
+            Ok(_) => (),
+            other => panic!("Wrong result to get_body_bytes_max_size: {:?}", other),
+        }
     }
 }

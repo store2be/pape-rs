@@ -1,15 +1,18 @@
-#![deny(warnings)]
-
 extern crate chrono;
 #[macro_use]
 extern crate error_chain;
 extern crate futures;
 extern crate hyper;
 extern crate hyper_tls;
+#[macro_use]
+extern crate lazy_static;
 extern crate mktemp;
 #[macro_use]
 extern crate mime;
 extern crate multipart;
+#[macro_use]
+extern crate quickcheck;
+extern crate regex;
 extern crate serde;
 #[macro_use]
 extern crate serde_json;
@@ -23,8 +26,10 @@ extern crate tokio_core;
 extern crate tokio_io;
 extern crate tokio_process;
 
+pub mod config;
 pub mod error;
 pub mod http;
+mod human_size;
 pub mod papers;
 mod renderer;
 pub mod server;

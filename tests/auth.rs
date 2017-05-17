@@ -3,20 +3,42 @@ extern crate hyper;
 extern crate tokio_core;
 extern crate papers;
 
+#[macro_use]
+extern crate lazy_static;
+
 use futures::Future;
 use hyper::client::{Client, Request};
 use hyper::Method::Post;
 use hyper::header::{Authorization, Bearer};
+use papers::config::Config;
 use papers::http::RequestExt;
+
+fn config_with_auth() -> &'static Config {
+    lazy_static! {
+        static ref CONFIG_WITH_AUTH: Config = Config::from_env().with_auth("secret-string".to_string());
+    }
+
+    &CONFIG_WITH_AUTH
+}
+
+fn config_empty_auth() -> &'static Config {
+    lazy_static! {
+        static ref CONFIG_EMPTY_AUTH: Config = Config::from_env().with_auth("".to_string());
+    }
+
+    &CONFIG_EMPTY_AUTH
+}
+
+
 
 #[test]
 fn test_submit_ignore_auth_when_bearer_not_set() {
     std::thread::spawn(|| {
-                           papers::server::Server::new()
-                               .with_port(38018)
-                               .with_auth("".to_string())
-                               .start();
-                       });
+        papers::server::Server::new()
+            .with_port(38018)
+            .with_config(&config_empty_auth())
+            .start();
+    });
 
     std::thread::sleep(std::time::Duration::from_millis(20));
 
@@ -37,11 +59,11 @@ fn test_submit_ignore_auth_when_bearer_not_set() {
 #[test]
 fn test_submit_fails_when_auth_is_expected_but_missing() {
     std::thread::spawn(|| {
-                           papers::server::Server::new()
-                               .with_port(38019)
-                               .with_auth("secret-string".to_string())
-                               .start();
-                       });
+        papers::server::Server::new()
+            .with_port(38019)
+            .with_config(&config_with_auth())
+            .start();
+    });
 
     std::thread::sleep(std::time::Duration::from_millis(20));
 
@@ -61,11 +83,8 @@ fn test_submit_fails_when_auth_is_expected_but_missing() {
 #[test]
 fn test_submit_fails_if_auth_header_does_not_match_env_var() {
     std::thread::spawn(|| {
-                           papers::server::Server::new()
-                               .with_port(38021)
-                               .with_auth("secret-string".to_string())
-                               .start();
-                       });
+        papers::server::Server::new().with_port(38021).with_config(&config_with_auth()).start();
+    });
 
     std::thread::sleep(std::time::Duration::from_millis(20));
 
@@ -86,11 +105,8 @@ fn test_submit_fails_if_auth_header_does_not_match_env_var() {
 
 fn test_submit_succeeds_if_auth_header_matches_env_var() {
     std::thread::spawn(|| {
-                           papers::server::Server::new()
-                               .with_port(38020)
-                               .with_auth("secret-string".to_string())
-                               .start();
-                       });
+        papers::server::Server::new().with_port(38020).with_config(&config_with_auth()).start();
+    });
 
     std::thread::sleep(std::time::Duration::from_millis(20));
 
@@ -111,11 +127,8 @@ fn test_submit_succeeds_if_auth_header_matches_env_var() {
 #[test]
 fn test_preview_fails_if_auth_header_does_not_match_env_var() {
     std::thread::spawn(|| {
-                           papers::server::Server::new()
-                               .with_port(38022)
-                               .with_auth("secret-string".to_string())
-                               .start();
-                       });
+        papers::server::Server::new().with_port(38022).with_config(&config_with_auth()).start();
+    });
 
     std::thread::sleep(std::time::Duration::from_millis(20));
 
@@ -136,11 +149,8 @@ fn test_preview_fails_if_auth_header_does_not_match_env_var() {
 #[test]
 fn test_preview_succeeds_if_auth_header_matches_env_var() {
     std::thread::spawn(|| {
-                           papers::server::Server::new()
-                               .with_port(38023)
-                               .with_auth("secret-string".to_string())
-                               .start();
-                       });
+        papers::server::Server::new().with_port(38023).with_config(&config_with_auth()).start();
+    });
 
     std::thread::sleep(std::time::Duration::from_millis(20));
 

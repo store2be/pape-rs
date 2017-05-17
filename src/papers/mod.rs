@@ -13,6 +13,7 @@ use http::*;
 use error::{Error, ErrorKind};
 pub use self::document_spec::{DocumentSpec, PapersUri};
 use renderer::Renderer;
+use config::Config;
 
 pub fn log_request(logger: &slog::Logger, req: &Request) {
     info!(
@@ -25,23 +26,19 @@ pub fn log_request(logger: &slog::Logger, req: &Request) {
 }
 
 pub struct Papers {
-    auth: String,
     remote: Remote,
     logger: slog::Logger,
     max_assets_per_document: u8,
+    config: &'static Config,
 }
 
 impl Papers {
-    pub fn new(remote: Remote,
-               logger: slog::Logger,
-               auth: String,
-               max_assets_per_document: u8)
-               -> Papers {
+    pub fn new(remote: Remote, logger: slog::Logger, config: &'static Config, max_assets_per_document: u8) -> Papers {
         Papers {
-            auth,
             remote,
             logger,
             max_assets_per_document,
+            config
         }
     }
 
@@ -51,12 +48,12 @@ impl Papers {
         let authorization = headers.get::<Authorization<Bearer>>();
         match authorization {
             Some(header_bearer) => {
-                if self.auth != "" && header_bearer.token != self.auth {
+                if self.config.auth != "" && header_bearer.token != self.config.auth {
                     return Err(Error::from_kind(ErrorKind::Forbidden));
                 }
             }
             None => {
-                if self.auth != "" {
+                if self.config.auth != "" {
                     return Err(Error::from_kind(ErrorKind::Forbidden));
                 }
             }
@@ -77,6 +74,7 @@ impl Papers {
         }
 
         let handle = self.remote.handle().unwrap().clone();
+        let max_asset_size = self.config.max_asset_size;
 
         let response = req.get_body_bytes();
 
@@ -102,9 +100,9 @@ impl Papers {
 
         let renderer = {
             let logger = self.logger.clone();
-            let handle = handle.clone();
-            document_spec
-                .and_then(|document_spec| result(Renderer::new(handle, document_spec, logger)))
+            let remote = self.remote.clone();
+            document_spec.and_then(move |document_spec|
+               result(Renderer::new(remote, max_asset_size, document_spec, logger)))
         };
 
         let response = {
@@ -130,29 +128,30 @@ impl Papers {
             return Box::new(err(ErrorKind::UnprocessableEntity.into()));
         }
 
-        let handle = self.remote.handle().unwrap();
         let logger = self.logger.clone();
+        let remote = self.remote.clone();
+        let max_asset_size = self.config.max_asset_size;
 
         let response = req.get_body_bytes();
         let document_spec = response.and_then(|body| {
             result(serde_json::from_slice::<DocumentSpec>(body.as_slice())
                        .map_err(|_| ErrorKind::UnprocessableEntity.into()))
         });
-        let renderer =
-            document_spec.and_then(|document_spec| {
-                                       result(Renderer::new(handle, document_spec, logger))
-                                           .map_err(|err| {
+
+        let renderer = document_spec.and_then(move |document_spec| {
+            result(Renderer::new(remote, max_asset_size, document_spec, logger))
+                .map_err(|err| {
                     Error::with_chain(err, ErrorKind::InternalServerError)
                 })
-                                   });
+        });
 
         let preview = renderer.and_then(|renderer| renderer.preview());
 
         let response = preview.and_then(|populated_template| {
-                                            ok(Response::new()
-                                                   .with_status(StatusCode::Ok)
-                                                   .with_body(populated_template))
-                                        });
+            ok(Response::new()
+               .with_status(StatusCode::Ok)
+               .with_body(populated_template))
+        });
 
         Box::new(response)
 
@@ -198,10 +197,10 @@ impl NewService for Papers {
 
     fn new_service(&self) -> Result<Self::Instance, ::std::io::Error> {
         Ok(Papers {
-               auth: self.auth.clone(),
-               remote: self.remote.clone(),
-               logger: self.logger.clone(),
-               max_assets_per_document: self.max_assets_per_document,
-           })
+            remote: self.remote.clone(),
+            logger: self.logger.clone(),
+            max_assets_per_document: self.max_assets_per_document,
+            config: &self.config,
+        })
     }
 }
