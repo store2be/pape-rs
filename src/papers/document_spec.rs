@@ -3,7 +3,8 @@ use serde_json as json;
 use chrono::UTC;
 
 #[derive(Clone, Deserialize, Serialize, Debug)]
-pub struct PapersUri(#[serde(with = "uri_deserializer")] pub Uri);
+pub struct PapersUri(#[serde(with = "uri_deserializer")]
+                     pub Uri);
 
 /// See https://serde.rs/custom-date-format.html for the custom deserialization.
 /// An alternative design would be making a newtype containing an Uri and implementing Deserialize
@@ -31,18 +32,23 @@ mod uri_deserializer {
     }
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Uri, D::Error>
-        where D: Deserializer<'de> {
+        where D: Deserializer<'de>
+    {
         let uri_string = String::deserialize(deserializer)?;
         uri_string.parse().map_err(serde::de::Error::custom)
     }
 }
 
 
-fn default_assets() -> Vec<PapersUri> { Vec::new() }
+fn default_assets() -> Vec<PapersUri> {
+    Vec::new()
+}
 fn default_output_filename() -> String {
     format!("out_{}.pdf", UTC::now().to_rfc3339())
 }
-fn default_value() -> json::Value { json!({}) }
+fn default_value() -> json::Value {
+    json!({})
+}
 
 #[cfg(test)]
 mod tests {
