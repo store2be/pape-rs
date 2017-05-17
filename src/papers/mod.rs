@@ -28,14 +28,16 @@ pub struct Papers {
     auth: String,
     remote: Remote,
     logger: slog::Logger,
+    max_assets_per_document: u8,
 }
 
 impl Papers {
-    pub fn new(remote: Remote, logger: slog::Logger, auth: String) -> Papers {
+    pub fn new(remote: Remote, logger: slog::Logger, auth: String, max_assets_per_document: u8) -> Papers {
         Papers {
             auth,
             remote,
             logger,
+            max_assets_per_document,
         }
     }
 
@@ -77,6 +79,14 @@ impl Papers {
         let document_spec = response.and_then(|body| {
             result(serde_json::from_slice::<DocumentSpec>(body.as_slice())
                        .map_err(|err| Error::with_chain(err, ErrorKind::UnprocessableEntity)))
+        });
+
+        let max_assets_per_document = self.max_assets_per_document;
+        let document_spec = document_spec.and_then(move |spec| {
+            if spec.assets_urls.len() > max_assets_per_document as usize {
+                return err(ErrorKind::UnprocessableEntity.into());
+            }
+            ok(spec)
         });
 
         let renderer = {
@@ -182,6 +192,7 @@ impl NewService for Papers {
                auth: self.auth.clone(),
                remote: self.remote.clone(),
                logger: self.logger.clone(),
+               max_assets_per_document: self.max_assets_per_document,
            })
     }
 }

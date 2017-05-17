@@ -65,7 +65,7 @@ impl Server {
 
     pub fn start(self) {
         let mut core = tokio_core::reactor::Core::new().unwrap();
-        let papers_service = Papers::new(core.remote(), self.logger.new(o!()), self.auth);
+        let papers_service = Papers::new(core.remote(), self.logger.new(o!()), self.auth, self.max_assets_per_document);
         let socket_addr = format!("0.0.0.0:{:?}", self.port).parse().unwrap();
         let handle = core.handle();
         let listener = tokio_core::net::TcpListener::bind(&socket_addr, &core.handle()).unwrap();
