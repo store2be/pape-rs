@@ -59,6 +59,13 @@ impl Server {
         Server { auth, ..self }
     }
 
+    pub fn with_max_assets_per_document(self, max_assets_per_document: u8) -> Server {
+        Server {
+            max_assets_per_document,
+            ..self
+        }
+    }
+
     pub fn with_port(self, port: i32) -> Server {
         Server { port, ..self }
     }

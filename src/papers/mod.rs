@@ -103,7 +103,6 @@ impl Papers {
                               handle.spawn(renderer.execute());
                               ok(Response::new().with_status(StatusCode::Ok))
                           })
-                .map_err(|_| ErrorKind::InternalServerError.into())
         };
 
         Box::new(response)
