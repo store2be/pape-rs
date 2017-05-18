@@ -81,9 +81,11 @@ impl Papers {
                        .map_err(|err| Error::with_chain(err, ErrorKind::UnprocessableEntity)))
         });
 
+        let logger = self.logger.clone();
         let max_assets_per_document = self.max_assets_per_document;
         let document_spec = document_spec.and_then(move |spec| {
             if spec.assets_urls.len() > max_assets_per_document as usize {
+                error!(logger, "Assets URLs length exceeds the maximum ({}). To change it set PAPERS_MAX_ASSETS_PER_DOCUMENT", max_assets_per_document);
                 return err(ErrorKind::UnprocessableEntity.into());
             }
             ok(spec)
