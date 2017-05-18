@@ -32,7 +32,11 @@ pub struct Papers {
 }
 
 impl Papers {
-    pub fn new(remote: Remote, logger: slog::Logger, auth: String, max_assets_per_document: u8) -> Papers {
+    pub fn new(remote: Remote,
+               logger: slog::Logger,
+               auth: String,
+               max_assets_per_document: u8)
+               -> Papers {
         Papers {
             auth,
             remote,
@@ -85,7 +89,12 @@ impl Papers {
         let max_assets_per_document = self.max_assets_per_document;
         let document_spec = document_spec.and_then(move |spec| {
             if spec.assets_urls.len() > max_assets_per_document as usize {
-                error!(logger, "Assets URLs length exceeds the maximum ({}). To change it set PAPERS_MAX_ASSETS_PER_DOCUMENT", max_assets_per_document);
+                error!(
+                    logger,
+                    "Assets URLs length exceeds the maximum ({}).\
+                    To change it set PAPERS_MAX_ASSETS_PER_DOCUMENT",
+                    max_assets_per_document,
+                );
                 return err(ErrorKind::UnprocessableEntity.into());
             }
             ok(spec)
@@ -100,11 +109,10 @@ impl Papers {
 
         let response = {
             let handle = handle.clone();
-            renderer
-                .and_then(move |renderer| {
-                              handle.spawn(renderer.execute());
-                              ok(Response::new().with_status(StatusCode::Ok))
-                          })
+            renderer.and_then(move |renderer| {
+                                  handle.spawn(renderer.execute());
+                                  ok(Response::new().with_status(StatusCode::Ok))
+                              })
         };
 
         Box::new(response)

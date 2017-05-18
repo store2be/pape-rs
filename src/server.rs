@@ -20,9 +20,10 @@ fn max_assets_per_document(logger: &slog::Logger) -> u8 {
     match ::std::env::var("PAPERS_MAX_ASSETS_PER_DOCUMENT").map(|max| max.parse()) {
         Ok(Ok(max)) => max,
         Ok(Err(_)) => {
-            warn!(logger, "Unable to parse PAPERS_MAX_ASSETS_PER_DOCUMENT environmental variable");
+            warn!(logger,
+                  "Unable to parse PAPERS_MAX_ASSETS_PER_DOCUMENT environmental variable");
             default
-        },
+        }
         _ => default,
     }
 }
@@ -72,7 +73,10 @@ impl Server {
 
     pub fn start(self) {
         let mut core = tokio_core::reactor::Core::new().unwrap();
-        let papers_service = Papers::new(core.remote(), self.logger.new(o!()), self.auth, self.max_assets_per_document);
+        let papers_service = Papers::new(core.remote(),
+                                         self.logger.new(o!()),
+                                         self.auth,
+                                         self.max_assets_per_document);
         let socket_addr = format!("0.0.0.0:{:?}", self.port).parse().unwrap();
         let handle = core.handle();
         let listener = tokio_core::net::TcpListener::bind(&socket_addr, &core.handle()).unwrap();

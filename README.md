@@ -136,7 +136,7 @@ Default: 8080
 
 ### PAPERS_MAX_ASSETS_PER_DOCUMENT
 
-The maximum length of assets per document/request accepted by Papers
+The maximum amount of assets per document/request accepted by Papers
 
 ```
 Default: 20
