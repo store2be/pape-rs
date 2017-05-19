@@ -1,5 +1,7 @@
 extern crate futures;
 #[macro_use]
+extern crate lazy_static;
+#[macro_use]
 extern crate mime;
 extern crate hyper;
 extern crate slog;
@@ -13,13 +15,19 @@ use hyper::client::{Client, Request};
 use hyper::header::ContentType;
 
 use papers::http::*;
+use papers::prelude::*;
 
 #[test]
 fn test_assets_exceed_max_length() {
+    lazy_static! {
+        static ref CONFIG: Config = Config::from_env()
+            .with_max_assets_per_document(1);
+    }
+
     std::thread::spawn(|| {
                            papers::server::Server::new()
                                .with_port(8049)
-                               .with_max_assets_per_document(1)
+                               .with_config(&CONFIG)
                                .start();
                        });
 

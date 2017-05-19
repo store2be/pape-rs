@@ -1,28 +1,34 @@
 use futures::future;
 use futures::Future;
 use hyper;
-use hyper::Uri;
-use hyper::client::{Client, Request};
+use hyper::{Response, Request, Uri};
+use hyper::client::Client;
+use hyper::server::Service;
+use hyper_tls::HttpsConnector;
 use mktemp::Temp;
-use slog;
 use std::io::prelude::*;
+use std::marker::PhantomData;
 use std::path::Path;
 use std::process::Command;
-use tokio_core::reactor::{Remote, Handle};
+use tokio_core::reactor::Handle;
 use tokio_process::CommandExt;
 use tera::Tera;
 
 use http::*;
 use papers::DocumentSpec;
 use error::{Error, ErrorKind};
+use config::Config;
 
-pub struct Renderer {
-    dir: Temp,
-    document_spec: DocumentSpec,
-    max_asset_size: u32,
-    handle: Handle,
-    template_path: ::std::path::PathBuf,
-    logger: slog::Logger,
+pub trait FromHandle {
+    fn build(handle: &Handle) -> Self;
+}
+
+impl FromHandle for Client<HttpsConnector> {
+    fn build(handle: &Handle) -> Self {
+        Client::configure()
+            .connector(https_connector(&handle))
+            .build(&handle)
+    }
 }
 
 fn extract_filename_from_uri(uri: &Uri) -> Option<String> {
@@ -38,35 +44,47 @@ fn extract_filename_from_uri(uri: &Uri) -> Option<String> {
     }
 }
 
-// Since `mktemp::Temp` implements Drop by deleting the directory, we don't need to worry about
-// leaving files or directories behind. On the flipside, we must ensure it is not dropped before
-// the last returned future that needs the directory finishes.
-impl Renderer {
-    pub fn new(remote: Remote, max_asset_size: u32, document_spec: DocumentSpec, logger: slog::Logger) -> Result<Renderer, Error> {
-        let dir = Temp::new_dir()?;
-        let mut template_path = dir.to_path_buf();
-        template_path.push(Path::new(&document_spec.output_filename.replace("pdf", "tex")));
-        Ok(Renderer {
-            document_spec,
-            handle: remote.handle().unwrap(),
-            template_path,
-            dir,
-            logger,
-            max_asset_size,
-        })
-    }
+pub trait Renderer {
+    fn new(config: &'static Config, handle: Handle) -> Self;
+    fn preview(&self, d: DocumentSpec) -> Box<Future<Item=String, Error=Error>>;
+    fn render(&self, d: DocumentSpec) -> Box<Future<Item=(), Error=()>>;
+}
 
-    fn get_template(&self) -> Box<Future<Item = hyper::client::Response, Error = Error>> {
+#[derive(Clone, Debug)]
+pub struct ConcreteRenderer<S>
+    where S: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle
+{
+    config: &'static Config,
+    handle: Handle,
+    _client: PhantomData<S>,
+}
+
+impl<S> ConcreteRenderer<S>
+    where S: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle
+{
+    fn get_template(&self, template_url: &Uri) -> Box<Future<Item=hyper::client::Response, Error=Error>> {
         Client::configure()
             .connector(https_connector(&self.handle))
             .build(&self.handle)
-            .get_follow_redirect(&self.document_spec.template_url.0)
+            .get_follow_redirect(template_url)
+    }
+}
+
+impl<S> Renderer for ConcreteRenderer<S>
+    where S: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle
+{
+    fn new(config: &'static Config, handle: Handle) -> Self {
+        ConcreteRenderer {
+            config,
+            handle,
+            _client: PhantomData,
+        }
     }
 
-    pub fn preview(self) -> Box<Future<Item = String, Error = Error>> {
-        let response = self.get_template();
-        let Renderer { document_spec, max_asset_size, ..  } = self;
-        let DocumentSpec { variables, ..  } = document_spec;
+    fn preview(&self, document_spec: DocumentSpec) -> Box<Future<Item=String, Error=Error>> {
+        let DocumentSpec { variables, template_url, ..  } = document_spec;
+        let response = self.get_template(&template_url.0);
+        let max_asset_size = self.config.max_asset_size;
         let bytes = response.and_then(move |res| res.get_body_bytes_limit(max_asset_size));
         let template_string = bytes.and_then(|bytes| ::std::string::String::from_utf8(bytes).map_err(Error::from));
         let rendered = template_string.and_then(move |template_string| {
@@ -75,17 +93,25 @@ impl Renderer {
         Box::new(rendered)
     }
 
-    pub fn execute(self) -> Box<Future<Item = (), Error = ()>> {
-        let res = self.get_template();
+    // Since `mktemp::Temp` implements Drop by deleting the directory, we don't need to worry about
+    // leaving files or directories behind. On the flipside, we must ensure it is not dropped before
+    // the last returned future that needs the directory finishes.
+    fn render(&self, document_spec: DocumentSpec) -> Box<Future<Item=(), Error=()>> {
+        let dir = Temp::new_dir();
 
-        let Renderer {
-            dir,
-            document_spec,
-            handle,
-            logger,
-            max_asset_size,
-            template_path,
-        } = self;
+        if let Err(err) = dir {
+            error!(self.config.logger, err);
+            return Box::new(future::err(()))
+        }
+
+        let dir = dir.unwrap();
+
+        let temp_dir_path = dir.to_path_buf();
+        let mut template_path = temp_dir_path.clone();
+        template_path.push(Path::new(&document_spec.output_filename.replace("pdf", "tex")));
+        let max_asset_size = self.config.max_asset_size;
+        let handle = self.handle.clone();
+        let logger = self.config.logger.clone();
 
         debug!(logger,
                "Trying to generate PDF with document spec: {:?}",
@@ -95,13 +121,14 @@ impl Renderer {
             assets_urls,
             callback_url,
             output_filename,
+            template_url,
             variables,
             ..
         } = document_spec;
 
-        debug!(logger, "Starting Renderer worker");
+        let res = self.get_template(&template_url.0);
 
-        let temp_dir_path = dir.to_path_buf();
+        debug!(logger, "Starting Renderer worker");
 
         // First download the template and populate it
         let bytes = res.and_then(move |res| res.get_body_bytes_limit(max_asset_size));
@@ -274,6 +301,41 @@ impl Renderer {
         Box::new(handle_errors.map_err(|_| ()))
     }
 }
+
+/// A renderer that should never be called. This is meant for testing.
+pub struct NilRenderer;
+
+impl Renderer for NilRenderer {
+    fn new(_: &'static Config, _: Handle) -> Self {
+        unimplemented!();
+    }
+
+    fn preview(&self, _: DocumentSpec) -> Box<Future<Item=String, Error=Error>> {
+        unimplemented!();
+    }
+
+    fn render(&self, _: DocumentSpec) -> Box<Future<Item=(), Error=()>> {
+        unimplemented!();
+    }
+}
+
+/// A renderer that does nothing. Meant for testing.
+pub struct NoopRenderer;
+
+impl Renderer for NoopRenderer {
+    fn new(_: &'static Config, _: Handle) -> Self {
+        NoopRenderer
+    }
+
+    fn preview(&self, _: DocumentSpec) -> Box<Future<Item=String, Error=Error>> {
+        Box::new(future::ok("".to_string()))
+    }
+
+    fn render(&self, _: DocumentSpec) -> Box<Future<Item=(), Error=()>> {
+        Box::new(future::ok(()))
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

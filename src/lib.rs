@@ -31,5 +31,13 @@ pub mod error;
 pub mod http;
 mod human_size;
 pub mod papers;
-mod renderer;
+pub mod renderer;
 pub mod server;
+
+pub mod prelude {
+    pub use config::Config;
+    pub use error::Error;
+    pub use papers::{DocumentSpec, Papers, PapersUri};
+    pub use renderer::{FromHandle, Renderer, ConcreteRenderer, NoopRenderer, NilRenderer};
+    pub use server::Server;
+}
