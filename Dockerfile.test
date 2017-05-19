@@ -1,7 +1,7 @@
 FROM debian:jessie-slim
 
 RUN apt-get update -y && \
-    apt-get install --no-install-recommends -y texlive-xetex && \
+    apt-get install --no-install-recommends -y texlive-xetex fonts-lmodern && \
     rm -rf /var/lib/apt/lists/
 
 RUN apt-get update -y && \
