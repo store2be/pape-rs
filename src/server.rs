@@ -15,10 +15,24 @@ pub fn is_debug_active() -> bool {
     }
 }
 
+fn max_assets_per_document(logger: &slog::Logger) -> u8 {
+    let default = 20;
+    match ::std::env::var("PAPERS_MAX_ASSETS_PER_DOCUMENT").map(|max| max.parse()) {
+        Ok(Ok(max)) => max,
+        Ok(Err(_)) => {
+            warn!(logger,
+                  "Unable to parse PAPERS_MAX_ASSETS_PER_DOCUMENT environmental variable");
+            default
+        }
+        _ => default,
+    }
+}
+
 pub struct Server {
     auth: String,
     port: i32,
     logger: slog::Logger,
+    max_assets_per_document: u8,
 }
 
 impl Server {
@@ -33,15 +47,24 @@ impl Server {
                                 move |record| record.level().is_at_least(minimum_level));
         let logger = slog::Logger::root(drain, o!());
         let bearer = ::std::env::var("PAPERS_BEARER").unwrap_or_else(|_| "".to_string());
+        let max_assets_per_document = max_assets_per_document(&logger);
         Server {
             auth: bearer,
             port: 8008,
             logger: logger,
+            max_assets_per_document,
         }
     }
 
     pub fn with_auth(self, auth: String) -> Server {
         Server { auth, ..self }
+    }
+
+    pub fn with_max_assets_per_document(self, max_assets_per_document: u8) -> Server {
+        Server {
+            max_assets_per_document,
+            ..self
+        }
     }
 
     pub fn with_port(self, port: i32) -> Server {
@@ -50,7 +73,10 @@ impl Server {
 
     pub fn start(self) {
         let mut core = tokio_core::reactor::Core::new().unwrap();
-        let papers_service = Papers::new(core.remote(), self.logger.new(o!()), self.auth);
+        let papers_service = Papers::new(core.remote(),
+                                         self.logger.new(o!()),
+                                         self.auth,
+                                         self.max_assets_per_document);
         let socket_addr = format!("0.0.0.0:{:?}", self.port).parse().unwrap();
         let handle = core.handle();
         let listener = tokio_core::net::TcpListener::bind(&socket_addr, &core.handle()).unwrap();

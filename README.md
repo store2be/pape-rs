@@ -119,7 +119,7 @@ PAPERS_BEARER=secret-string
 
 ### PAPERS_LOG_LEVEL
 
-The logger level for the papers service.
+The logger level for the Papers service.
 
 ```
 Default: info
@@ -132,4 +132,12 @@ The port the Papers sever runs on.
 
 ```
 Default: 8080
+```
+
+### PAPERS_MAX_ASSETS_PER_DOCUMENT
+
+The maximum amount of assets per document/request accepted by Papers
+
+```
+Default: 20
 ```

@@ -28,14 +28,20 @@ pub struct Papers {
     auth: String,
     remote: Remote,
     logger: slog::Logger,
+    max_assets_per_document: u8,
 }
 
 impl Papers {
-    pub fn new(remote: Remote, logger: slog::Logger, auth: String) -> Papers {
+    pub fn new(remote: Remote,
+               logger: slog::Logger,
+               auth: String,
+               max_assets_per_document: u8)
+               -> Papers {
         Papers {
             auth,
             remote,
             logger,
+            max_assets_per_document,
         }
     }
 
@@ -79,6 +85,21 @@ impl Papers {
                        .map_err(|err| Error::with_chain(err, ErrorKind::UnprocessableEntity)))
         });
 
+        let logger = self.logger.clone();
+        let max_assets_per_document = self.max_assets_per_document;
+        let document_spec = document_spec.and_then(move |spec| {
+            if spec.assets_urls.len() > max_assets_per_document as usize {
+                error!(
+                    logger,
+                    "Assets URLs length exceeds the maximum ({}).\
+                    To change it set PAPERS_MAX_ASSETS_PER_DOCUMENT",
+                    max_assets_per_document,
+                );
+                return err(ErrorKind::UnprocessableEntity.into());
+            }
+            ok(spec)
+        });
+
         let renderer = {
             let logger = self.logger.clone();
             let handle = handle.clone();
@@ -88,12 +109,10 @@ impl Papers {
 
         let response = {
             let handle = handle.clone();
-            renderer
-                .and_then(move |renderer| {
-                              handle.spawn(renderer.execute());
-                              ok(Response::new().with_status(StatusCode::Ok))
-                          })
-                .map_err(|_| ErrorKind::InternalServerError.into())
+            renderer.and_then(move |renderer| {
+                                  handle.spawn(renderer.execute());
+                                  ok(Response::new().with_status(StatusCode::Ok))
+                              })
         };
 
         Box::new(response)
@@ -182,6 +201,7 @@ impl NewService for Papers {
                auth: self.auth.clone(),
                remote: self.remote.clone(),
                logger: self.logger.clone(),
+               max_assets_per_document: self.max_assets_per_document,
            })
     }
 }
