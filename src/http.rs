@@ -6,9 +6,9 @@ use multipart;
 use hyper;
 use hyper_tls::HttpsConnector;
 use std::path::PathBuf;
-use hyper::server;
+use hyper::server::{self, Service};
 use hyper::header::{Header, ContentDisposition, ContentType, DispositionParam};
-use hyper::client::{Client, Request, Response};
+use hyper::{Request, Response};
 use multipart::client::lazy;
 use hyper::header::Location;
 use hyper::{Uri, StatusCode};
@@ -135,10 +135,20 @@ pub trait ClientExt {
     fn get_follow_redirect(self, uri: &Uri) -> Box<Future<Item = Response, Error = Error>>;
 }
 
-impl ClientExt for Client<HttpsConnector> {
+impl<S> ClientExt for S
+    where S: Service<
+        Request=Request,
+        Response=Response,
+        Error=hyper::Error,
+    > + 'static
+{
     fn get_follow_redirect(self, uri: &Uri) -> Box<Future<Item = Response, Error = Error>> {
         Box::new(future::loop_fn(uri.clone(), move |uri| {
-            self.get(uri)
+            let request = Request::new(
+                hyper::Method::Get,
+                uri
+            );
+            self.call(request)
                 .map_err(Error::from)
                 .and_then(|res| match determine_get_result(res) {
                               Ok(GetResult::Redirect(redirect_uri)) => {

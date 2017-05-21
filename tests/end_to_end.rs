@@ -44,7 +44,10 @@ impl server::Service for MockServer {
     fn call(&self, req: Self::Request) -> Self::Future {
         let res = match req.path() {
             "/assets/logo.png" => server::Response::new().with_body(b"54321" as &[u8]),
-            "/template" => server::Response::new().with_body(TEMPLATE),
+            "/template" => {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+                server::Response::new().with_body(TEMPLATE)
+            },
             "/callback" => server::Response::new(),
             _ => server::Response::new().with_status(hyper::StatusCode::NotFound),
 

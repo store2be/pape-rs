@@ -66,16 +66,20 @@ fn test_simple_template_preview() {
         "http://127.0.0.1:8019/preview".parse().unwrap())
         .with_body(document_spec.into())
         .with_header(ContentType(mime!(Application/Json)));
-    let core = tokio_core::reactor::Core::new().unwrap();
+    let mut core = tokio_core::reactor::Core::new().unwrap();
 
     lazy_static! {
         static ref CONFIG: Config = Config::from_env();
     }
 
     let papers: Papers<ConcreteRenderer<MockServer>> = Papers::new(core.remote(), &CONFIG);
-    let response = papers.call(request).wait().unwrap();
-    let status = response.status();
-    let body: Vec<u8> = response.get_body_bytes().wait().unwrap();
+    let response = papers.call(request).map_err(|_| ());
+    let (body, status) = core.run(
+        response.and_then(|response| {
+            let status = response.status();
+            response.get_body_bytes().map(move |body| (body, status)).map_err(|_| ())
+        })
+    ).unwrap();
     assert_eq!(status, hyper::StatusCode::Ok);
     assert_eq!(::std::str::from_utf8(&body).unwrap(),
                EXPECTED_TEMPLATE_RESULT);

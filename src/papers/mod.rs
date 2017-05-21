@@ -1,6 +1,7 @@
 mod document_spec;
 
 use futures::future::{Future, ok, err, result};
+use futures::sync::oneshot;
 use hyper;
 use hyper::{Get, Post, Head, StatusCode};
 use hyper::server::{Request, Response, Service, NewService};
@@ -75,12 +76,9 @@ impl<R: Renderer> Papers<R> {
             return Box::new(err(ErrorKind::UnprocessableEntity.into()));
         }
 
-        let handle = self.remote.handle().unwrap().clone();
-        let config = self.config;
+        let body = req.get_body_bytes();
 
-        let response = req.get_body_bytes();
-
-        let document_spec = response.and_then(|body| {
+        let document_spec = body.and_then(|body| {
             result(serde_json::from_slice::<DocumentSpec>(body.as_slice())
                        .map_err(|err| Error::with_chain(err, ErrorKind::UnprocessableEntity)))
         });
@@ -100,10 +98,14 @@ impl<R: Renderer> Papers<R> {
             ok(spec)
         });
 
-        let response = document_spec.and_then(move |document_spec| {
-            handle.spawn(R::new(&config, handle.clone()).render(document_spec));
-            ok(Response::new().with_status(StatusCode::Ok))
-        });
+        let response = {
+            let config = self.config;
+            let remote = self.remote.clone();
+            document_spec.and_then(move |document_spec| {
+                remote.spawn(move |handle| R::new(&config, handle).render(document_spec));
+                ok(Response::new().with_status(StatusCode::Ok))
+            });
+        };
 
         Box::new(response)
     }
@@ -120,19 +122,23 @@ impl<R: Renderer> Papers<R> {
             return Box::new(err(ErrorKind::UnprocessableEntity.into()));
         }
 
-        let handle = self.remote.handle().unwrap().clone();
-        let config = self.config;
-
-        let response = req.get_body_bytes();
-        let document_spec = response.and_then(|body| {
-
+        let body = req.get_body_bytes();
+        let document_spec = body.and_then(|body| {
             result(serde_json::from_slice::<DocumentSpec>(body.as_slice())
                        .map_err(|_| ErrorKind::UnprocessableEntity.into()))
         });
 
-        let preview = document_spec.and_then(move |document_spec| {
-            R::new(&config, handle).preview(document_spec)
-        }).map_err(|err| Error::with_chain(err, ErrorKind::InternalServerError));
+        let preview = {
+            let remote = self.remote.clone();
+            let config = self.config;
+            let (sender, receiver) = oneshot::channel();
+            document_spec.and_then(move |document_spec| {
+                remote.spawn(move |handle| R::new(&config, handle).preview(document_spec, sender));
+                ok(())
+            })
+            .and_then(move |_| receiver.map_err(|err| panic!(err)))
+            .flatten()
+        };
 
         let response = preview.and_then(|populated_template| {
             ok(Response::new()

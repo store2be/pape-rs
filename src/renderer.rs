@@ -1,3 +1,4 @@
+use futures::sync::oneshot;
 use futures::future;
 use futures::Future;
 use hyper;
@@ -45,14 +46,14 @@ fn extract_filename_from_uri(uri: &Uri) -> Option<String> {
 }
 
 pub trait Renderer {
-    fn new(config: &'static Config, handle: Handle) -> Self;
-    fn preview(&self, d: DocumentSpec) -> Box<Future<Item=String, Error=Error>>;
+    fn new(config: &'static Config, handle: &Handle) -> Self;
+    fn preview(&self, d: DocumentSpec, sender: oneshot::Sender<Result<String, Error>>) -> Box<Future<Item=(), Error=()>>;
     fn render(&self, d: DocumentSpec) -> Box<Future<Item=(), Error=()>>;
 }
 
 #[derive(Clone, Debug)]
 pub struct ConcreteRenderer<S>
-    where S: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle
+    where S: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle + 'static
 {
     config: &'static Config,
     handle: Handle,
@@ -60,28 +61,25 @@ pub struct ConcreteRenderer<S>
 }
 
 impl<S> ConcreteRenderer<S>
-    where S: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle
+    where S: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle + 'static
 {
     fn get_template(&self, template_url: &Uri) -> Box<Future<Item=hyper::client::Response, Error=Error>> {
-        Client::configure()
-            .connector(https_connector(&self.handle))
-            .build(&self.handle)
-            .get_follow_redirect(template_url)
+        S::build(&self.handle).get_follow_redirect(template_url)
     }
 }
 
 impl<S> Renderer for ConcreteRenderer<S>
     where S: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle
 {
-    fn new(config: &'static Config, handle: Handle) -> Self {
+    fn new(config: &'static Config, handle: &Handle) -> Self {
         ConcreteRenderer {
             config,
-            handle,
+            handle: handle.clone(),
             _client: PhantomData,
         }
     }
 
-    fn preview(&self, document_spec: DocumentSpec) -> Box<Future<Item=String, Error=Error>> {
+    fn preview(&self, document_spec: DocumentSpec, sender: oneshot::Sender<Result<String, Error>>) -> Box<Future<Item=(), Error=()>> {
         let DocumentSpec { variables, template_url, ..  } = document_spec;
         let response = self.get_template(&template_url.0);
         let max_asset_size = self.config.max_asset_size;
@@ -90,7 +88,8 @@ impl<S> Renderer for ConcreteRenderer<S>
         let rendered = template_string.and_then(move |template_string| {
             Tera::one_off(&template_string, &variables, false).map_err(Error::from)
         });
-        Box::new(rendered)
+        let work = rendered.then(|rendered| sender.send(rendered)).map(|_| ()).map_err(|_| ());
+        Box::new(work)
     }
 
     // Since `mktemp::Temp` implements Drop by deleting the directory, we don't need to worry about
@@ -306,11 +305,11 @@ impl<S> Renderer for ConcreteRenderer<S>
 pub struct NilRenderer;
 
 impl Renderer for NilRenderer {
-    fn new(_: &'static Config, _: Handle) -> Self {
+    fn new(_: &'static Config, _: &Handle) -> Self {
         unimplemented!();
     }
 
-    fn preview(&self, _: DocumentSpec) -> Box<Future<Item=String, Error=Error>> {
+    fn preview(&self, _: DocumentSpec, _: oneshot::Sender<Result<String, Error>>) -> Box<Future<Item=(), Error=()>> {
         unimplemented!();
     }
 
@@ -323,12 +322,12 @@ impl Renderer for NilRenderer {
 pub struct NoopRenderer;
 
 impl Renderer for NoopRenderer {
-    fn new(_: &'static Config, _: Handle) -> Self {
+    fn new(_: &'static Config, _: &Handle) -> Self {
         NoopRenderer
     }
 
-    fn preview(&self, _: DocumentSpec) -> Box<Future<Item=String, Error=Error>> {
-        Box::new(future::ok("".to_string()))
+    fn preview(&self, _: DocumentSpec, _: oneshot::Sender<Result<String, Error>>) -> Box<Future<Item=(), Error=()>> {
+        Box::new(future::ok(()))
     }
 
     fn render(&self, _: DocumentSpec) -> Box<Future<Item=(), Error=()>> {

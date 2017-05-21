@@ -36,7 +36,7 @@ pub mod server;
 
 pub mod prelude {
     pub use config::Config;
-    pub use error::Error;
+    pub use error::{Error, ErrorKind};
     pub use papers::{DocumentSpec, Papers, PapersUri};
     pub use renderer::{FromHandle, Renderer, ConcreteRenderer, NoopRenderer, NilRenderer};
     pub use server::Server;
