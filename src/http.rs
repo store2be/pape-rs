@@ -64,6 +64,8 @@ impl ServerRequestExt for server::Request {
 pub trait ResponseExt {
     fn filename(&self) -> Option<String>;
     fn get_body_bytes(self) -> Box<Future<Item = Vec<u8>, Error = Error>>;
+    /// Try to populate a vector with the contents of the response body, but stop after `limit`
+    /// bytes with an error.
     fn get_body_bytes_limit(self, limit: u32) -> Box<Future<Item = Vec<u8>, Error = Error>>;
 }
 
