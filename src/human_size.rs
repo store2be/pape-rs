@@ -29,7 +29,7 @@ impl FromStr for Bytes {
                     Some(unit) => Ok(Bytes(scale(quantity, unit.as_str()))),
                     None => Ok(Bytes(quantity)),
                 }
-            },
+            }
             None => Err(()),
         }
     }

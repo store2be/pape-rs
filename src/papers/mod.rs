@@ -64,7 +64,7 @@ impl<R: Renderer> Papers<R> {
         Ok(())
     }
 
-    fn submit(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
+    fn submit(&self, req: Request) -> Box<Future<Item = Response, Error = Error>> {
         log_request(&self.config.logger, &req);
         debug!(self.config.logger, "{:#?}", req);
 
@@ -102,15 +102,18 @@ impl<R: Renderer> Papers<R> {
             let config = self.config;
             let remote = self.remote.clone();
             document_spec.and_then(move |document_spec| {
-                remote.spawn(move |handle| R::new(&config, handle).render(document_spec));
-                ok(Response::new().with_status(StatusCode::Ok))
-            });
+                                       remote.spawn(move |handle| {
+                                                        R::new(&config, handle)
+                                                            .render(document_spec)
+                                                    });
+                                       ok(Response::new().with_status(StatusCode::Ok))
+                                   })
         };
 
         Box::new(response)
     }
 
-    fn preview(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
+    fn preview(&self, req: Request) -> Box<Future<Item = Response, Error = Error>> {
         log_request(&self.config.logger, &req);
         debug!(self.config.logger, "{:#?}", req);
 
@@ -132,25 +135,29 @@ impl<R: Renderer> Papers<R> {
             let remote = self.remote.clone();
             let config = self.config;
             let (sender, receiver) = oneshot::channel();
-            document_spec.and_then(move |document_spec| {
-                remote.spawn(move |handle| R::new(&config, handle).preview(document_spec, sender));
-                ok(())
-            })
-            .and_then(move |_| receiver.map_err(|err| panic!(err)))
-            .flatten()
+            document_spec
+                .and_then(move |document_spec| {
+                              remote.spawn(move |handle| {
+                                               R::new(&config, handle).preview(document_spec,
+                                                                               sender)
+                                           });
+                              ok(())
+                          })
+                .and_then(move |_| receiver.map_err(|err| panic!(err)))
+                .flatten()
         };
 
         let response = preview.and_then(|populated_template| {
-            ok(Response::new()
-               .with_status(StatusCode::Ok)
-               .with_body(populated_template))
-        });
+                                            ok(Response::new()
+                                                   .with_status(StatusCode::Ok)
+                                                   .with_body(populated_template))
+                                        });
 
         Box::new(response)
 
     }
 
-    fn health_check(&self, req: Request) -> Box<Future<Item=Response, Error=Error>> {
+    fn health_check(&self, req: Request) -> Box<Future<Item = Response, Error = Error>> {
         log_request(&self.config.logger, &req);
         Box::new(ok(Response::new().with_status(StatusCode::Ok)))
     }
@@ -164,17 +171,19 @@ impl<R: Renderer> Service for Papers<R> {
 
     fn call(&self, req: Self::Request) -> Self::Future {
         let response = match (req.method(), req.path()) {
-            (&Get, "/healthz") | (&Head, "/healthz") => self.health_check(req),
-            (&Post, "/preview") => self.preview(req),
-            (&Post, "/submit") => self.submit(req),
-            _ => {
-                log_request(&self.config.logger, &req);
-                Box::new(ok(Response::new().with_status(StatusCode::NotFound)))
+                (&Get, "/healthz") |
+                (&Head, "/healthz") => self.health_check(req),
+                (&Post, "/preview") => self.preview(req),
+                (&Post, "/submit") => self.submit(req),
+                _ => {
+                    log_request(&self.config.logger, &req);
+                    Box::new(ok(Response::new().with_status(StatusCode::NotFound)))
+                }
             }
-        }.then(|handler_result| match handler_result {
-            Ok(response) => ok(response),
-            Err(err) => ok(err.into_response()),
-        });
+            .then(|handler_result| match handler_result {
+                      Ok(response) => ok(response),
+                      Err(err) => ok(err.into_response()),
+                  });
 
         Box::new(response)
     }
@@ -188,9 +197,9 @@ impl<R: Renderer> NewService for Papers<R> {
 
     fn new_service(&self) -> Result<Self::Instance, ::std::io::Error> {
         Ok(Papers {
-            remote: self.remote.clone(),
-            config: &self.config,
-            _renderer: PhantomData,
-        })
+               remote: self.remote.clone(),
+               config: &self.config,
+               _renderer: PhantomData,
+           })
     }
 }

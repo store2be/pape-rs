@@ -47,7 +47,7 @@ impl server::Service for MockServer {
             "/template" => {
                 std::thread::sleep(std::time::Duration::from_millis(20));
                 server::Response::new().with_body(TEMPLATE)
-            },
+            }
             "/callback" => server::Response::new(),
             _ => server::Response::new().with_status(hyper::StatusCode::NotFound),
 

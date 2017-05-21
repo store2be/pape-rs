@@ -47,8 +47,11 @@ fn extract_filename_from_uri(uri: &Uri) -> Option<String> {
 
 pub trait Renderer {
     fn new(config: &'static Config, handle: &Handle) -> Self;
-    fn preview(&self, d: DocumentSpec, sender: oneshot::Sender<Result<String, Error>>) -> Box<Future<Item=(), Error=()>>;
-    fn render(&self, d: DocumentSpec) -> Box<Future<Item=(), Error=()>>;
+    fn preview(&self,
+               d: DocumentSpec,
+               sender: oneshot::Sender<Result<String, Error>>)
+               -> Box<Future<Item = (), Error = ()>>;
+    fn render(&self, d: DocumentSpec) -> Box<Future<Item = (), Error = ()>>;
 }
 
 #[derive(Clone, Debug)]
@@ -69,7 +72,7 @@ impl<S> ConcreteRenderer<S>
 }
 
 impl<S> Renderer for ConcreteRenderer<S>
-    where S: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle
+    where S: Service<Request = Request, Response = Response, Error = hyper::Error> + FromHandle
 {
     fn new(config: &'static Config, handle: &Handle) -> Self {
         ConcreteRenderer {
@@ -79,28 +82,41 @@ impl<S> Renderer for ConcreteRenderer<S>
         }
     }
 
-    fn preview(&self, document_spec: DocumentSpec, sender: oneshot::Sender<Result<String, Error>>) -> Box<Future<Item=(), Error=()>> {
-        let DocumentSpec { variables, template_url, ..  } = document_spec;
+    fn preview(&self,
+               document_spec: DocumentSpec,
+               sender: oneshot::Sender<Result<String, Error>>)
+               -> Box<Future<Item = (), Error = ()>> {
+        let DocumentSpec {
+            variables,
+            template_url,
+            ..
+        } = document_spec;
         let response = self.get_template(&template_url.0);
         let max_asset_size = self.config.max_asset_size;
         let bytes = response.and_then(move |res| res.get_body_bytes_limit(max_asset_size));
-        let template_string = bytes.and_then(|bytes| ::std::string::String::from_utf8(bytes).map_err(Error::from));
-        let rendered = template_string.and_then(move |template_string| {
-            Tera::one_off(&template_string, &variables, false).map_err(Error::from)
-        });
-        let work = rendered.then(|rendered| sender.send(rendered)).map(|_| ()).map_err(|_| ());
+        let template_string =
+            bytes.and_then(|bytes| ::std::string::String::from_utf8(bytes).map_err(Error::from));
+        let rendered =
+            template_string.and_then(move |template_string| {
+                                         Tera::one_off(&template_string, &variables, false)
+                                             .map_err(Error::from)
+                                     });
+        let work = rendered
+            .then(|rendered| sender.send(rendered))
+            .map(|_| ())
+            .map_err(|_| ());
         Box::new(work)
     }
 
     // Since `mktemp::Temp` implements Drop by deleting the directory, we don't need to worry about
     // leaving files or directories behind. On the flipside, we must ensure it is not dropped before
     // the last returned future that needs the directory finishes.
-    fn render(&self, document_spec: DocumentSpec) -> Box<Future<Item=(), Error=()>> {
+    fn render(&self, document_spec: DocumentSpec) -> Box<Future<Item = (), Error = ()>> {
         let dir = Temp::new_dir();
 
         if let Err(err) = dir {
             error!(self.config.logger, err);
-            return Box::new(future::err(()))
+            return Box::new(future::err(()));
         }
 
         let dir = dir.unwrap();
@@ -169,33 +185,37 @@ impl<S> Renderer for ConcreteRenderer<S>
             let max_asset_size = max_asset_size;
             written_template_path.and_then(move |_| {
                 debug!(logger, "Downloading assets {:?}", assets_urls);
-                let futures = assets_urls.into_iter().map(move |uri| {
-                    let logger = logger.clone();
-                    let mut path = temp_dir_path.clone();
+                let futures = assets_urls
+                    .into_iter()
+                    .map(move |uri| {
+                        let logger = logger.clone();
+                        let mut path = temp_dir_path.clone();
 
-                    let response = Client::configure()
-                        .connector(https_connector(&handle))
-                        .build(&handle)
-                        .get_follow_redirect(&uri.0);
+                        let response = Client::configure()
+                            .connector(https_connector(&handle))
+                            .build(&handle)
+                            .get_follow_redirect(&uri.0);
 
-                    let body = response.and_then(move |res| {
-                            let filename = res.filename();
-                            res.get_body_bytes_limit(max_asset_size).map(|bytes| (bytes, filename))
-                    });
-                    body.and_then(move |(bytes, filename)| {
-                        let filename = filename.or_else(|| extract_filename_from_uri(&uri.0));
-                        match filename {
-                            Some(filename) => {
-                                path.push(filename);
-                                debug!(logger, "Writing asset {:?} as {:?}", uri, path);
-                                ::std::fs::File::create(&path)
-                                    .and_then(|mut file| file.write_all(&bytes))
-                                    .map_err(Error::from)
+                        let body = response.and_then(move |res| {
+                                                         let filename = res.filename();
+                                                         res.get_body_bytes_limit(max_asset_size)
+                                                             .map(|bytes| (bytes, filename))
+                                                     });
+                        body.and_then(move |(bytes, filename)| {
+                            let filename =
+                                filename.or_else(|| extract_filename_from_uri(&uri.0));
+                            match filename {
+                                Some(filename) => {
+                                    path.push(filename);
+                                    debug!(logger, "Writing asset {:?} as {:?}", uri, path);
+                                    ::std::fs::File::create(&path)
+                                        .and_then(|mut file| file.write_all(&bytes))
+                                        .map_err(Error::from)
+                                }
+                                _ => Ok(()),
                             }
-                            _ => Ok(()),
-                        }
-                    })
-                });
+                        })
+                    });
                 future::join_all(futures)
             })
         };
@@ -309,11 +329,14 @@ impl Renderer for NilRenderer {
         unimplemented!();
     }
 
-    fn preview(&self, _: DocumentSpec, _: oneshot::Sender<Result<String, Error>>) -> Box<Future<Item=(), Error=()>> {
+    fn preview(&self,
+               _: DocumentSpec,
+               _: oneshot::Sender<Result<String, Error>>)
+               -> Box<Future<Item = (), Error = ()>> {
         unimplemented!();
     }
 
-    fn render(&self, _: DocumentSpec) -> Box<Future<Item=(), Error=()>> {
+    fn render(&self, _: DocumentSpec) -> Box<Future<Item = (), Error = ()>> {
         unimplemented!();
     }
 }
@@ -326,11 +349,14 @@ impl Renderer for NoopRenderer {
         NoopRenderer
     }
 
-    fn preview(&self, _: DocumentSpec, _: oneshot::Sender<Result<String, Error>>) -> Box<Future<Item=(), Error=()>> {
+    fn preview(&self,
+               _: DocumentSpec,
+               _: oneshot::Sender<Result<String, Error>>)
+               -> Box<Future<Item = (), Error = ()>> {
         Box::new(future::ok(()))
     }
 
-    fn render(&self, _: DocumentSpec) -> Box<Future<Item=(), Error=()>> {
+    fn render(&self, _: DocumentSpec) -> Box<Future<Item = (), Error = ()>> {
         Box::new(future::ok(()))
     }
 }

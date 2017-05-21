@@ -63,16 +63,18 @@ impl ServerRequestExt for server::Request {
 
 pub trait ResponseExt {
     fn filename(&self) -> Option<String>;
-    fn get_body_bytes(self) -> Box<Future<Item=Vec<u8>, Error=Error>>;
-    fn get_body_bytes_limit(self, limit: u32) -> Box<Future<Item=Vec<u8>, Error=Error>>;
+    fn get_body_bytes(self) -> Box<Future<Item = Vec<u8>, Error = Error>>;
+    fn get_body_bytes_limit(self, limit: u32) -> Box<Future<Item = Vec<u8>, Error = Error>>;
 }
 
 impl ResponseExt for Response {
-    fn get_body_bytes_limit(self, limit: u32) -> Box<Future<Item=Vec<u8>, Error=Error>> {
-        Box::new(self.body().from_err().fold(Vec::<u8>::new(), move |mut acc, chunk| {
+    fn get_body_bytes_limit(self, limit: u32) -> Box<Future<Item = Vec<u8>, Error = Error>> {
+        Box::new(self.body()
+                     .from_err()
+                     .fold(Vec::<u8>::new(), move |mut acc, chunk| {
 
             if (acc.len() + chunk.len()) > limit as usize {
-                return future::err(ErrorKind::UnprocessableEntity.into())
+                return future::err(ErrorKind::UnprocessableEntity.into());
             }
 
             acc.extend_from_slice(&chunk);
@@ -136,18 +138,11 @@ pub trait ClientExt {
 }
 
 impl<S> ClientExt for S
-    where S: Service<
-        Request=Request,
-        Response=Response,
-        Error=hyper::Error,
-    > + 'static
+    where S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static
 {
     fn get_follow_redirect(self, uri: &Uri) -> Box<Future<Item = Response, Error = Error>> {
         Box::new(future::loop_fn(uri.clone(), move |uri| {
-            let request = Request::new(
-                hyper::Method::Get,
-                uri
-            );
+            let request = Request::new(hyper::Method::Get, uri);
             self.call(request)
                 .map_err(Error::from)
                 .and_then(|res| match determine_get_result(res) {
@@ -361,12 +356,12 @@ mod tests {
         type Request = server::Request;
         type Response = server::Response;
         type Error = hyper::Error;
-        type Future = Box<Future<Item=server::Response, Error=hyper::Error>>;
+        type Future = Box<Future<Item = server::Response, Error = hyper::Error>>;
 
         fn call(&self, _: Self::Request) -> Self::Future {
             let mut response_body: Vec<u8> = Vec::with_capacity(3000);
 
-            for n in 0 .. 3000 {
+            for n in 0..3000 {
                 response_body.push((n / 250) as u8);
             }
 

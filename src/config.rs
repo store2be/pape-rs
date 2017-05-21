@@ -45,9 +45,14 @@ impl Config {
 
         let auth = ::std::env::var("PAPERS_BEARER").unwrap_or_else(|_| "".to_string());
 
-        let minimum_level = if is_debug_active() { Level::Debug } else { Level::Info };
+        let minimum_level = if is_debug_active() {
+            Level::Debug
+        } else {
+            Level::Info
+        };
         let drain = slog_term::streamer().full().build().fuse();
-        let drain = Filter::new(drain, move |record| record.level().is_at_least(minimum_level));
+        let drain = Filter::new(drain,
+                                move |record| record.level().is_at_least(minimum_level));
         let logger = slog::Logger::root(drain, o!());
 
         let max_assets_per_document = max_assets_per_document(&logger);
@@ -61,10 +66,7 @@ impl Config {
     }
 
     pub fn with_auth(self, auth: String) -> Config {
-        Config {
-            auth,
-            ..self
-        }
+        Config { auth, ..self }
     }
 
     pub fn with_max_assets_per_document(self, max_assets_per_document: u8) -> Config {
@@ -73,5 +75,4 @@ impl Config {
             ..self
         }
     }
-
 }

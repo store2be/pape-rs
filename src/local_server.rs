@@ -72,13 +72,13 @@ impl server::Service for LocalServer {
                         }
                     }
                     multipart.save().with_dir(".");
-                }).map(|_| {
-                    server::Response::new()
-                }).or_else(|err: Error| {
-                    println!("Error on callback endpoint: {}", err);
-                    future::ok(server::Response::new())
-                }))
-            },
+                })
+                             .map(|_| server::Response::new())
+                             .or_else(|err: Error| {
+                                          println!("Error on callback endpoint: {}", err);
+                                          future::ok(server::Response::new())
+                                      }))
+            }
             path => {
                 let file_path = path.trim_left_matches('/');
                 let file = File::open(Path::new(file_path))
@@ -125,10 +125,9 @@ fn main() {
         variables: variables,
     };
 
-    let req = Request::new(
-            hyper::Method::Post,
-            "http://127.0.0.1:8019/submit".parse().unwrap())
-        .with_body( json::to_string(&document_spec).unwrap().into() )
-        .with_header(hyper::header::ContentType(mime!(Application/Json)));
+    let req = Request::new(hyper::Method::Post,
+                           "http://127.0.0.1:8019/submit".parse().unwrap())
+            .with_body(json::to_string(&document_spec).unwrap().into())
+            .with_header(hyper::header::ContentType(mime!(Application / Json)));
     core.run(papers.call(req)).unwrap();
 }
