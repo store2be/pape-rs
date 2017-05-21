@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 extern crate chrono;
 #[macro_use]
 extern crate error_chain;
@@ -10,6 +12,7 @@ extern crate mktemp;
 #[macro_use]
 extern crate mime;
 extern crate multipart;
+#[cfg(test)]
 #[macro_use]
 extern crate quickcheck;
 extern crate regex;
