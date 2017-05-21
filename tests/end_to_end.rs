@@ -64,16 +64,17 @@ impl server::Service for MockServer {
 fn test_end_to_end() {
     let (sender, receiver) = mpsc::channel(30);
 
-    std::thread::spawn(|| { papers::server::Server::new().with_port(8019).start(); });
+    let _join_mock =
+        std::thread::spawn(|| { papers::server::Server::new().with_port(8019).start(); });
 
-    std::thread::spawn(move || {
-                           hyper::server::Http::new()
-                               .bind(&"127.0.0.1:8733".parse().unwrap(),
-                                     move || Ok(MockServer::new(sender.clone())))
-                               .unwrap()
-                               .run()
-                               .unwrap();
-                       });
+    let _join_papers = std::thread::spawn(move || {
+        hyper::server::Http::new()
+            .bind(&"127.0.0.1:8733".parse().unwrap(),
+                  move || Ok(MockServer::new(sender.clone())))
+            .unwrap()
+            .run()
+            .unwrap();
+    });
 
     std::thread::sleep(std::time::Duration::from_millis(20));
 
@@ -83,7 +84,7 @@ fn test_end_to_end() {
     let test_client = Client::new(&handle.clone());
 
     let document_spec = r#"{
-        "assets_urls": ["http://127.0.0.1:8733/assets/logo.png", "http://127.0.0.1/8733/dead-end/"],
+        "assets_urls": ["http://127.0.0.1:8733/assets/logo.png"],
         "template_url": "http://127.0.0.1:8733/template",
         "callback_url": "http://127.0.0.1:8733/callback",
         "variables": {
