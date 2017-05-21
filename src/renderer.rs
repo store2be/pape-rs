@@ -27,8 +27,8 @@ pub trait FromHandle {
 impl FromHandle for Client<HttpsConnector> {
     fn build(handle: &Handle) -> Self {
         Client::configure()
-            .connector(https_connector(&handle))
-            .build(&handle)
+            .connector(https_connector(handle))
+            .build(handle)
     }
 }
 

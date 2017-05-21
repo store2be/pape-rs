@@ -103,7 +103,7 @@ impl<R: Renderer> Papers<R> {
             let remote = self.remote.clone();
             document_spec.and_then(move |document_spec| {
                                        remote.spawn(move |handle| {
-                                                        R::new(&config, handle)
+                                                        R::new(config, handle)
                                                             .render(document_spec)
                                                     });
                                        ok(Response::new().with_status(StatusCode::Ok))
@@ -138,7 +138,7 @@ impl<R: Renderer> Papers<R> {
             document_spec
                 .and_then(move |document_spec| {
                               remote.spawn(move |handle| {
-                                               R::new(&config, handle).preview(document_spec,
+                                               R::new(config, handle).preview(document_spec,
                                                                                sender)
                                            });
                               ok(())
@@ -198,7 +198,7 @@ impl<R: Renderer> NewService for Papers<R> {
     fn new_service(&self) -> Result<Self::Instance, ::std::io::Error> {
         Ok(Papers {
                remote: self.remote.clone(),
-               config: &self.config,
+               config: self.config,
                _renderer: PhantomData,
            })
     }

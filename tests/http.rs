@@ -21,7 +21,7 @@ fn config() -> &'static Config {
 #[test]
 fn test_health_check() {
     let core = tokio_core::reactor::Core::new().unwrap();
-    let service: Papers<NilRenderer> = Papers::new(core.remote(), &config());
+    let service: Papers<NilRenderer> = Papers::new(core.remote(), config());
     let request = Request::new(hyper::Method::Get,
                                "http://127.0.0.1:8018/healthz".parse().unwrap());
     let response = service.call(request).wait().unwrap();
@@ -31,7 +31,7 @@ fn test_health_check() {
 #[test]
 fn test_404() {
     let core = tokio_core::reactor::Core::new().unwrap();
-    let service: Papers<NilRenderer> = Papers::new(core.remote(), &config());
+    let service: Papers<NilRenderer> = Papers::new(core.remote(), config());
     let request = Request::new(hyper::Method::Get,
                                "http://127.0.0.1:8018/dead-end".parse().unwrap());
     let response = service.call(request).wait().unwrap();
