@@ -66,7 +66,10 @@ pub struct ConcreteRenderer<S>
 impl<S> ConcreteRenderer<S>
     where S: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle + 'static
 {
-    fn get_template(&self, template_url: &Uri) -> Box<Future<Item=hyper::client::Response, Error=Error>> {
+    fn get_template(&self, template_url: &Uri) -> Box<Future<
+        Item=hyper::client::Response,
+        Error=Error>
+    > {
         S::build(&self.handle).get_follow_redirect(template_url)
     }
 }

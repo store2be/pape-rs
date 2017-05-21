@@ -18,7 +18,8 @@ use papers::http::RequestExt;
 
 fn config_with_auth() -> &'static Config {
     lazy_static! {
-        static ref CONFIG_WITH_AUTH: Config = Config::from_env().with_auth("secret-string".to_string());
+        static ref CONFIG_WITH_AUTH: Config = Config::from_env()
+            .with_auth("secret-string".to_string());
     }
 
     &CONFIG_WITH_AUTH
