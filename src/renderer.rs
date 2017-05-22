@@ -324,6 +324,49 @@ impl<S> Renderer for ConcreteRenderer<S>
     }
 }
 
+/// Meant for use in papers-local
+pub struct LocalRenderer;
+
+impl Renderer for LocalRenderer {
+    fn new(_: &'static Config, _: &Handle) -> Self {
+        LocalRenderer
+    }
+
+    fn preview(&self,
+               _: DocumentSpec,
+               _: oneshot::Sender<Result<String, Error>>)
+               -> Box<Future<Item = (), Error = ()>> {
+        unimplemented!();
+    }
+
+    fn render(&self, document_spec: DocumentSpec) -> Box<Future<Item = (), Error = ()>> {
+        let DocumentSpec { variables, .. } = document_spec;
+        let template_string = ::std::fs::File::open("template.tex")
+            .expect("could not open template.tex")
+            .bytes()
+            .collect::<Result<Vec<u8>, _>>()
+            .unwrap();
+        let template_string = String::from_utf8(template_string).unwrap();
+        let rendered_template = Tera::one_off(&template_string, &variables, false)
+            .expect("failed to render the template");
+        let mut rendered_template_file = ::std::fs::File::create("rendered.tex")
+            .expect("could not create rendered.tex");
+        rendered_template_file
+            .write_all(rendered_template.as_bytes())
+            .unwrap();
+        let output = Command::new("xelatex")
+            .arg("-interaction=nonstopmode")
+            .arg("-file-line-error")
+            .arg("-shell-restricted")
+            .arg("rendered.tex")
+            .output()
+            .expect("latex error")
+            .stdout;
+        println!("{}", String::from_utf8(output).unwrap());
+        Box::new(future::ok(()))
+    }
+}
+
 /// A renderer that should never be called. This is meant for testing.
 pub struct NilRenderer;
 

@@ -103,8 +103,7 @@ impl<R: Renderer> Papers<R> {
             let remote = self.remote.clone();
             document_spec.and_then(move |document_spec| {
                                        remote.spawn(move |handle| {
-                                                        R::new(config, handle)
-                                                            .render(document_spec)
+                                                        R::new(config, handle).render(document_spec)
                                                     });
                                        ok(Response::new().with_status(StatusCode::Ok))
                                    })
@@ -138,8 +137,7 @@ impl<R: Renderer> Papers<R> {
             document_spec
                 .and_then(move |document_spec| {
                               remote.spawn(move |handle| {
-                                               R::new(config, handle).preview(document_spec,
-                                                                               sender)
+                                               R::new(config, handle).preview(document_spec, sender)
                                            });
                               ok(())
                           })
