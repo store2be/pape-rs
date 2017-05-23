@@ -90,7 +90,7 @@ impl<S> Renderer for ConcreteRenderer<S>
         } = document_spec;
         let response = self.get_template(&template_url.0);
         let max_asset_size = self.config.max_asset_size;
-        let bytes = response.and_then(move |res| res.get_body_bytes_limit(max_asset_size));
+        let bytes = response.and_then(move |res| res.get_body_bytes_with_limit(max_asset_size));
         let template_string =
             bytes.and_then(|bytes| ::std::string::String::from_utf8(bytes).map_err(Error::from));
         let rendered =
@@ -143,7 +143,7 @@ impl<S> Renderer for ConcreteRenderer<S>
         debug!(logger, "Starting Renderer worker");
 
         // First download the template and populate it
-        let bytes = res.and_then(move |res| res.get_body_bytes_limit(max_asset_size));
+        let bytes = res.and_then(move |res| res.get_body_bytes_with_limit(max_asset_size));
 
         let template_string = {
             let logger = logger.clone();
@@ -194,10 +194,10 @@ impl<S> Renderer for ConcreteRenderer<S>
                             .get_follow_redirect(&uri.0);
 
                         let body = response.and_then(move |res| {
-                                                         let filename = res.filename();
-                                                         res.get_body_bytes_limit(max_asset_size)
-                                                             .map(|bytes| (bytes, filename))
-                                                     });
+                            let filename = res.filename();
+                            res.get_body_bytes_with_limit(max_asset_size)
+                                .map(|bytes| (bytes, filename))
+                        });
                         body.and_then(move |(bytes, filename)| {
                             let filename =
                                 filename.or_else(|| extract_filename_from_uri(&uri.0));
@@ -288,7 +288,7 @@ impl<S> Renderer for ConcreteRenderer<S>
                       "Callback response: {}",
                       response.status().canonical_reason().unwrap_or("unknown"));
 
-                response.get_body_bytes_limit(max_asset_size)
+                response.get_body_bytes_with_limit(max_asset_size)
             })
         };
 

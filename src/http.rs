@@ -66,11 +66,11 @@ pub trait ResponseExt {
     fn get_body_bytes(self) -> Box<Future<Item = Vec<u8>, Error = Error>>;
     /// Try to populate a vector with the contents of the response body, but stop after `limit`
     /// bytes with an error.
-    fn get_body_bytes_limit(self, limit: u32) -> Box<Future<Item = Vec<u8>, Error = Error>>;
+    fn get_body_bytes_with_limit(self, limit: u32) -> Box<Future<Item = Vec<u8>, Error = Error>>;
 }
 
 impl ResponseExt for Response {
-    fn get_body_bytes_limit(self, limit: u32) -> Box<Future<Item = Vec<u8>, Error = Error>> {
+    fn get_body_bytes_with_limit(self, limit: u32) -> Box<Future<Item = Vec<u8>, Error = Error>> {
         Box::new(self.body()
                      .from_err()
                      .fold(Vec::<u8>::new(), move |mut acc, chunk| {
@@ -352,10 +352,10 @@ mod tests {
     }
 
     #[test]
-    fn test_get_body_bytes_limit_is_enforced() {
+    fn test_get_body_bytes_with_limit_is_enforced() {
         let request = Request::new(hyper::Method::Get, "/".parse().unwrap());
         let response = MockFileServer.call(request).wait().unwrap();
-        let result = response.get_body_bytes_limit(2000).wait();
+        let result = response.get_body_bytes_with_limit(2000).wait();
         match result {
             Err(Error(ErrorKind::UnprocessableEntity, _)) => (),
             other => panic!("Wrong result to get_body_bytes_max_size: {:?}", other),
@@ -363,10 +363,10 @@ mod tests {
     }
 
     #[test]
-    fn test_get_body_bytes_limit_is_not_excessively_zealous() {
+    fn test_get_body_bytes_with_limit_is_not_excessively_zealous() {
         let request = Request::new(hyper::Method::Get, "/".parse().unwrap());
         let response = MockFileServer.call(request).wait().unwrap();
-        let result = response.get_body_bytes_limit(3000).wait();
+        let result = response.get_body_bytes_with_limit(3000).wait();
         match result {
             Ok(_) => (),
             other => panic!("Wrong result to get_body_bytes_max_size: {:?}", other),

@@ -23,9 +23,11 @@ pub fn is_debug_active() -> bool {
     }
 }
 
+/// Please refer to the README for more details about configuration
 #[derive(Debug)]
 pub struct Config {
-    /// TODO: document this here
+    /// A long secret that is used in the Authorization header to authenticate a request against
+    /// papers
     pub auth: String,
     /// Limits the number of assets allowed for a given DocumentSpec
     pub max_assets_per_document: u8,
