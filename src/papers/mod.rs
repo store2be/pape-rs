@@ -1,47 +1,47 @@
 mod document_spec;
 
 use futures::future::{Future, ok, err, result};
+use futures::sync::oneshot;
 use hyper;
 use hyper::{Get, Post, Head, StatusCode};
 use hyper::server::{Request, Response, Service, NewService};
 use hyper::header::{Authorization, Bearer};
 use serde_json;
 use slog;
+use std::marker::PhantomData;
 use tokio_core::reactor::Remote;
 
 use http::*;
 use error::{Error, ErrorKind};
 pub use self::document_spec::{DocumentSpec, PapersUri};
 use renderer::Renderer;
+use config::Config;
 
+// TODO: write a request logger middleware instead to avoid repetition
 pub fn log_request(logger: &slog::Logger, req: &Request) {
     info!(
         logger,
         "{} {} IP={:?}",
         req.method(),
         req.path(),
-        req.remote_addr().unwrap(),
+        req.remote_addr(),
     );
 }
 
-pub struct Papers {
-    auth: String,
+pub struct Papers<R>
+    where R: Renderer
+{
     remote: Remote,
-    logger: slog::Logger,
-    max_assets_per_document: u8,
+    config: &'static Config,
+    _renderer: PhantomData<R>,
 }
 
-impl Papers {
-    pub fn new(remote: Remote,
-               logger: slog::Logger,
-               auth: String,
-               max_assets_per_document: u8)
-               -> Papers {
+impl<R: Renderer> Papers<R> {
+    pub fn new(remote: Remote, config: &'static Config) -> Papers<R> {
         Papers {
-            auth,
             remote,
-            logger,
-            max_assets_per_document,
+            config,
+            _renderer: PhantomData,
         }
     }
 
@@ -51,12 +51,12 @@ impl Papers {
         let authorization = headers.get::<Authorization<Bearer>>();
         match authorization {
             Some(header_bearer) => {
-                if self.auth != "" && header_bearer.token != self.auth {
+                if self.config.auth != "" && header_bearer.token != self.config.auth {
                     return Err(Error::from_kind(ErrorKind::Forbidden));
                 }
             }
             None => {
-                if self.auth != "" {
+                if self.config.auth != "" {
                     return Err(Error::from_kind(ErrorKind::Forbidden));
                 }
             }
@@ -65,8 +65,8 @@ impl Papers {
     }
 
     fn submit(&self, req: Request) -> Box<Future<Item = Response, Error = Error>> {
-        log_request(&self.logger, &req);
-        debug!(self.logger, "{:#?}", req);
+        log_request(&self.config.logger, &req);
+        debug!(self.config.logger, "{:#?}", req);
 
         if let Err(error) = self.check_auth_header(&req) {
             return Box::new(err(error));
@@ -76,17 +76,15 @@ impl Papers {
             return Box::new(err(ErrorKind::UnprocessableEntity.into()));
         }
 
-        let handle = self.remote.handle().unwrap().clone();
+        let body = req.get_body_bytes();
 
-        let response = req.get_body_bytes();
-
-        let document_spec = response.and_then(|body| {
+        let document_spec = body.and_then(|body| {
             result(serde_json::from_slice::<DocumentSpec>(body.as_slice())
                        .map_err(|err| Error::with_chain(err, ErrorKind::UnprocessableEntity)))
         });
 
-        let logger = self.logger.clone();
-        let max_assets_per_document = self.max_assets_per_document;
+        let logger = self.config.logger.clone();
+        let max_assets_per_document = self.config.max_assets_per_document;
         let document_spec = document_spec.and_then(move |spec| {
             if spec.assets_urls.len() > max_assets_per_document as usize {
                 error!(
@@ -100,27 +98,23 @@ impl Papers {
             ok(spec)
         });
 
-        let renderer = {
-            let logger = self.logger.clone();
-            let handle = handle.clone();
-            document_spec
-                .and_then(|document_spec| result(Renderer::new(handle, document_spec, logger)))
-        };
-
         let response = {
-            let handle = handle.clone();
-            renderer.and_then(move |renderer| {
-                                  handle.spawn(renderer.execute());
-                                  ok(Response::new().with_status(StatusCode::Ok))
-                              })
+            let config = self.config;
+            let remote = self.remote.clone();
+            document_spec.and_then(move |document_spec| {
+                                       remote.spawn(move |handle| {
+                                                        R::new(config, handle).render(document_spec)
+                                                    });
+                                       ok(Response::new().with_status(StatusCode::Ok))
+                                   })
         };
 
         Box::new(response)
     }
 
     fn preview(&self, req: Request) -> Box<Future<Item = Response, Error = Error>> {
-        log_request(&self.logger, &req);
-        debug!(self.logger, "{:#?}", req);
+        log_request(&self.config.logger, &req);
+        debug!(self.config.logger, "{:#?}", req);
 
         if let Err(error) = self.check_auth_header(&req) {
             return Box::new(err(error));
@@ -130,23 +124,26 @@ impl Papers {
             return Box::new(err(ErrorKind::UnprocessableEntity.into()));
         }
 
-        let handle = self.remote.handle().unwrap();
-        let logger = self.logger.clone();
-
-        let response = req.get_body_bytes();
-        let document_spec = response.and_then(|body| {
+        let body = req.get_body_bytes();
+        let document_spec = body.and_then(|body| {
             result(serde_json::from_slice::<DocumentSpec>(body.as_slice())
                        .map_err(|_| ErrorKind::UnprocessableEntity.into()))
         });
-        let renderer =
-            document_spec.and_then(|document_spec| {
-                                       result(Renderer::new(handle, document_spec, logger))
-                                           .map_err(|err| {
-                    Error::with_chain(err, ErrorKind::InternalServerError)
-                })
-                                   });
 
-        let preview = renderer.and_then(|renderer| renderer.preview());
+        let preview = {
+            let remote = self.remote.clone();
+            let config = self.config;
+            let (sender, receiver) = oneshot::channel();
+            document_spec
+                .and_then(move |document_spec| {
+                              remote.spawn(move |handle| {
+                                               R::new(config, handle).preview(document_spec, sender)
+                                           });
+                              ok(())
+                          })
+                .and_then(move |_| receiver.map_err(|err| panic!(err)))
+                .flatten()
+        };
 
         let response = preview.and_then(|populated_template| {
                                             ok(Response::new()
@@ -159,12 +156,12 @@ impl Papers {
     }
 
     fn health_check(&self, req: Request) -> Box<Future<Item = Response, Error = Error>> {
-        log_request(&self.logger, &req);
+        log_request(&self.config.logger, &req);
         Box::new(ok(Response::new().with_status(StatusCode::Ok)))
     }
 }
 
-impl Service for Papers {
+impl<R: Renderer> Service for Papers<R> {
     type Request = Request;
     type Response = Response;
     type Error = hyper::Error;
@@ -177,7 +174,7 @@ impl Service for Papers {
                 (&Post, "/preview") => self.preview(req),
                 (&Post, "/submit") => self.submit(req),
                 _ => {
-                    log_request(&self.logger, &req);
+                    log_request(&self.config.logger, &req);
                     Box::new(ok(Response::new().with_status(StatusCode::NotFound)))
                 }
             }
@@ -190,18 +187,17 @@ impl Service for Papers {
     }
 }
 
-impl NewService for Papers {
+impl<R: Renderer> NewService for Papers<R> {
     type Request = Request;
     type Response = Response;
     type Error = hyper::Error;
-    type Instance = Papers;
+    type Instance = Papers<R>;
 
     fn new_service(&self) -> Result<Self::Instance, ::std::io::Error> {
         Ok(Papers {
-               auth: self.auth.clone(),
                remote: self.remote.clone(),
-               logger: self.logger.clone(),
-               max_assets_per_document: self.max_assets_per_document,
+               config: self.config,
+               _renderer: PhantomData,
            })
     }
 }

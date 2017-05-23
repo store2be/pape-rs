@@ -6,9 +6,9 @@ use multipart;
 use hyper;
 use hyper_tls::HttpsConnector;
 use std::path::PathBuf;
-use hyper::server;
+use hyper::server::{self, Service};
 use hyper::header::{Header, ContentDisposition, ContentType, DispositionParam};
-use hyper::client::{Client, Request, Response};
+use hyper::{Request, Response};
 use multipart::client::lazy;
 use hyper::header::Location;
 use hyper::{Uri, StatusCode};
@@ -64,9 +64,26 @@ impl ServerRequestExt for server::Request {
 pub trait ResponseExt {
     fn filename(&self) -> Option<String>;
     fn get_body_bytes(self) -> Box<Future<Item = Vec<u8>, Error = Error>>;
+    /// Try to populate a vector with the contents of the response body, but stop after `limit`
+    /// bytes with an error.
+    fn get_body_bytes_with_limit(self, limit: u32) -> Box<Future<Item = Vec<u8>, Error = Error>>;
 }
 
 impl ResponseExt for Response {
+    fn get_body_bytes_with_limit(self, limit: u32) -> Box<Future<Item = Vec<u8>, Error = Error>> {
+        Box::new(self.body()
+                     .from_err()
+                     .fold(Vec::<u8>::new(), move |mut acc, chunk| {
+
+            if (acc.len() + chunk.len()) > limit as usize {
+                return future::err(ErrorKind::UnprocessableEntity.into());
+            }
+
+            acc.extend_from_slice(&chunk);
+            future::ok::<_, Error>(acc)
+        }))
+    }
+
     fn filename(&self) -> Option<String> {
         match self.headers().get::<ContentDisposition>() {
             Some(&ContentDisposition { parameters: ref params, .. }) => {
@@ -122,10 +139,13 @@ pub trait ClientExt {
     fn get_follow_redirect(self, uri: &Uri) -> Box<Future<Item = Response, Error = Error>>;
 }
 
-impl ClientExt for Client<HttpsConnector> {
+impl<S> ClientExt for S
+    where S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static
+{
     fn get_follow_redirect(self, uri: &Uri) -> Box<Future<Item = Response, Error = Error>> {
         Box::new(future::loop_fn(uri.clone(), move |uri| {
-            self.get(uri)
+            let request = Request::new(hyper::Method::Get, uri);
+            self.call(request)
                 .map_err(Error::from)
                 .and_then(|res| match determine_get_result(res) {
                               Ok(GetResult::Redirect(redirect_uri)) => {
@@ -214,7 +234,6 @@ mod tests {
     use super::*;
     use hyper;
     use hyper::server::Service;
-    use tokio_core;
     use futures::future;
 
     #[derive(Debug, Clone)]
@@ -226,17 +245,6 @@ mod tests {
         fn respond_to_logo_png_with(content_disposition: hyper::header::ContentDisposition)
                                     -> MockServer {
             MockServer { response_to_logo_png: content_disposition }
-        }
-
-        fn start(self, port: i32) -> ::std::thread::JoinHandle<()> {
-            ::std::thread::spawn(move || {
-                                     hyper::server::Http::new()
-                                         .bind(&format!("127.0.0.1:{}", port).parse().unwrap(),
-                                               move || Ok(self.clone()))
-                                         .unwrap()
-                                         .run()
-                                         .unwrap();
-                                 })
         }
     }
 
@@ -263,46 +271,41 @@ mod tests {
 
     #[test]
     fn test_filename_prefers_content_disposition() {
-        let _join = MockServer::respond_to_logo_png_with(hyper::header::ContentDisposition {
+        let response_header = hyper::header::ContentDisposition {
             disposition: hyper::header::DispositionType::Attachment,
             parameters: vec![hyper::header::DispositionParam::Filename(
                 hyper::header::Charset::Ext("UTF-8".to_string()),
                 None,
                 b"this_should_be_the_filename.png".to_vec())],
-        }).start(8734);
+        };
+        let server = MockServer::respond_to_logo_png_with(response_header);
 
-        let mut core = tokio_core::reactor::Core::new().unwrap();
-        let client = hyper::client::Client::new(&core.handle());
         let request: hyper::client::Request<hyper::Body> =
             Request::new(hyper::Method::Get,
                          "http://127.0.0.1:8738/assets/logo.png".parse().unwrap());
 
-        let work = client.request(request);
-
-        let response = core.run(work).unwrap();
+        let response = server.call(request).wait().unwrap();
         assert_eq!(response.filename(),
                    Some("this_should_be_the_filename.png".to_string()))
     }
 
     #[test]
     fn test_filename_works_with_content_disposition_inline() {
-        let _join = MockServer::respond_to_logo_png_with(hyper::header::ContentDisposition {
+        let response_header = hyper::header::ContentDisposition {
             disposition: hyper::header::DispositionType::Inline,
             parameters: vec![hyper::header::DispositionParam::Filename(
-                hyper::header::Charset::Ext("UTF-8".to_string()),
-                None,
-                b"this_should_be_the_filename.png".to_vec())],
-        }).start(8738);
+                    hyper::header::Charset::Ext("UTF-8".to_string()),
+                    None,
+                    b"this_should_be_the_filename.png".to_vec())],
+        };
 
-        let mut core = tokio_core::reactor::Core::new().unwrap();
-        let client = hyper::client::Client::new(&core.handle());
+        let server = MockServer::respond_to_logo_png_with(response_header);
+
         let request: hyper::client::Request<hyper::Body> =
             Request::new(hyper::Method::Get,
                          "http://127.0.0.1:8738/assets/logo.png".parse().unwrap());
 
-        let work = client.request(request);
-
-        let response = core.run(work).unwrap();
+        let response = server.call(request).wait().unwrap();
         assert_eq!(response.filename(),
                    Some("this_should_be_the_filename.png".to_string()))
     }
@@ -310,25 +313,63 @@ mod tests {
     // S3 returns Content-Disposition without disposition (just filename)
     #[test]
     fn test_content_disposition_works_without_disposition() {
-        let _join = MockServer::respond_to_logo_png_with(hyper::header::ContentDisposition {
+        let server = MockServer::respond_to_logo_png_with(hyper::header::ContentDisposition {
                 disposition: hyper::header::DispositionType::Ext("".to_string()),
                 parameters: vec![hyper::header::DispositionParam::Filename(
                     hyper::header::Charset::Ext("UTF-8".to_string()),
                     None,
                     b"this_should_be_the_filename.png".to_vec(),
                     )],
-        }).start(8740);
+        });
 
-        let mut core = tokio_core::reactor::Core::new().unwrap();
-        let client = hyper::client::Client::new(&core.handle());
         let request: hyper::client::Request<hyper::Body> =
             Request::new(hyper::Method::Get,
                          "http://127.0.0.1:8740/assets/logo.png".parse().unwrap());
 
-        let work = client.request(request);
-
-        let response = core.run(work).unwrap();
+        let response = server.call(request).wait().unwrap();
         assert_eq!(response.filename(),
                    Some("this_should_be_the_filename.png".to_string()))
+    }
+
+    struct MockFileServer;
+
+    impl Service for MockFileServer {
+        type Request = server::Request;
+        type Response = server::Response;
+        type Error = hyper::Error;
+        type Future = Box<Future<Item = server::Response, Error = hyper::Error>>;
+
+        fn call(&self, _: Self::Request) -> Self::Future {
+            let mut response_body: Vec<u8> = Vec::with_capacity(3000);
+
+            for n in 0..3000 {
+                response_body.push((n / 250) as u8);
+            }
+
+            let res = server::Response::new().with_body(response_body);
+            Box::new(future::ok(res))
+        }
+    }
+
+    #[test]
+    fn test_get_body_bytes_with_limit_is_enforced() {
+        let request = Request::new(hyper::Method::Get, "/".parse().unwrap());
+        let response = MockFileServer.call(request).wait().unwrap();
+        let result = response.get_body_bytes_with_limit(2000).wait();
+        match result {
+            Err(Error(ErrorKind::UnprocessableEntity, _)) => (),
+            other => panic!("Wrong result to get_body_bytes_max_size: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_get_body_bytes_with_limit_is_not_excessively_zealous() {
+        let request = Request::new(hyper::Method::Get, "/".parse().unwrap());
+        let response = MockFileServer.call(request).wait().unwrap();
+        let result = response.get_body_bytes_with_limit(3000).wait();
+        match result {
+            Ok(_) => (),
+            other => panic!("Wrong result to get_body_bytes_max_size: {:?}", other),
+        }
     }
 }

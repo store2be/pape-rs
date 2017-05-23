@@ -1,5 +1,7 @@
 extern crate futures;
 #[macro_use]
+extern crate lazy_static;
+#[macro_use]
 extern crate mime;
 extern crate hyper;
 extern crate tokio_core;
@@ -7,10 +9,12 @@ extern crate papers;
 extern crate serde_json as json;
 
 use futures::future;
-use futures::{Future, Stream};
-use hyper::client::{Client, Request};
-use hyper::server;
+use futures::Future;
+use hyper::client::Request;
+use hyper::server::{self, Service};
 use hyper::header::ContentType;
+use papers::prelude::*;
+use papers::http::*;
 
 static TEMPLATE: &'static str = r"
 \documentclass{article}
@@ -30,7 +34,13 @@ hello, world
 
 struct MockServer;
 
-impl server::Service for MockServer {
+impl FromHandle for MockServer {
+    fn build(_: &tokio_core::reactor::Handle) -> Self {
+        MockServer
+    }
+}
+
+impl Service for MockServer {
     type Request = server::Request;
     type Response = server::Response;
     type Error = hyper::Error;
@@ -43,23 +53,6 @@ impl server::Service for MockServer {
 
 #[test]
 fn test_simple_template_preview() {
-    std::thread::spawn(|| { papers::server::Server::new().with_port(8019).start(); });
-
-    std::thread::spawn(|| {
-                           hyper::server::Http::new()
-                               .bind(&"127.0.0.1:8732".parse().unwrap(), || Ok(MockServer))
-                               .unwrap()
-                               .run()
-                               .unwrap();
-                       });
-
-    std::thread::sleep(std::time::Duration::from_millis(20));
-
-    let mut core = tokio_core::reactor::Core::new().unwrap();
-
-    let handle = core.handle();
-    let test_client = Client::new(&handle.clone());
-
     let document_spec = r#"{
         "template_url": "http://127.0.0.1:8732/test",
         "callback_url": "/",
@@ -68,29 +61,26 @@ fn test_simple_template_preview() {
         }
     }"#;
 
-    let request = {
-        let mut req = Request::new(hyper::Method::Post,
-                                   "http://127.0.0.1:8019/preview".parse().unwrap());
-        req.set_body(document_spec);
-        {
-            let mut headers = req.headers_mut();
-            headers.set(ContentType(mime!(Application / Json)));
-        }
-        req
-    };
-    let test = test_client
-        .request(request)
-        .and_then(|res| {
-            let status = res.status();
-            res.body()
-                .fold(Vec::new(), |mut acc, chunk| {
-                    acc.extend_from_slice(&chunk);
-                    future::ok::<_, hyper::Error>(acc)
-                })
-                .map(move |body| (status, body))
-        });
+    let request = Request::new(hyper::Method::Post,
+                               "http://127.0.0.1:8019/preview".parse().unwrap())
+            .with_body(document_spec.into())
+            .with_header(ContentType(mime!(Application / Json)));
+    let mut core = tokio_core::reactor::Core::new().unwrap();
 
-    let (status, body) = core.run(test).unwrap();
+    lazy_static! {
+        static ref CONFIG: Config = Config::from_env();
+    }
+
+    let papers: Papers<ConcreteRenderer<MockServer>> = Papers::new(core.remote(), &CONFIG);
+    let response = papers.call(request).map_err(|_| ());
+    let (body, status) = core.run(response.and_then(|response| {
+                                                        let status = response.status();
+                                                        response
+                                                            .get_body_bytes()
+                                                            .map(move |body| (body, status))
+                                                            .map_err(|_| ())
+                                                    }))
+        .unwrap();
     assert_eq!(status, hyper::StatusCode::Ok);
     assert_eq!(::std::str::from_utf8(&body).unwrap(),
                EXPECTED_TEMPLATE_RESULT);

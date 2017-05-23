@@ -141,3 +141,11 @@ The maximum amount of assets per document/request accepted by Papers
 ```
 Default: 20
 ```
+
+### PAPERS_MAX_ASSET_SIZE
+
+The maximum size of assets in bytes (or with K, M or G suffix).
+
+```
+Default: 10M
+```
