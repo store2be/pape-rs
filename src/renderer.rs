@@ -34,14 +34,8 @@ impl FromHandle for Client<HttpsConnector> {
 
 fn extract_filename_from_uri(uri: &Uri) -> Option<String> {
     match uri.path().split('/').last() {
-        Some(name) => {
-            if !name.is_empty() {
-                Some(name.to_string())
-            } else {
-                None
-            }
-        }
-        None => None,
+        Some(name) if !name.is_empty() => Some(name.to_string()),
+        _ => None,
     }
 }
 
