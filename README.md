@@ -4,7 +4,7 @@
 
 A Latex template to PDF generation web service written in Rust. Papers is available as a docker image on [Docker Hub](https://hub.docker.com/r/store2be/pape-rs/). It relies on an installation of [xelatex](https://en.wikipedia.org/wiki/XeTeX).
 
-**Papers uses semantic versioning. So unless 1.0.0 is reached expect many breaking changes.**
+**Papers uses semantic versioning. So until 1.0.0 is reached expect many breaking changes.**
 
 
 ## Examples / Documentation
@@ -34,7 +34,7 @@ Headers:
 Content-Type: application/json
 ```
 
-Exmpale body:
+Example body:
 
 ```json
 {
