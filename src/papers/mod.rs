@@ -17,7 +17,6 @@ pub use self::document_spec::{DocumentSpec, PapersUri};
 use renderer::Renderer;
 use config::Config;
 
-// TODO: write a request logger middleware instead to avoid repetition
 pub fn log_request(logger: &slog::Logger, req: &Request) {
     info!(
         logger,
@@ -65,7 +64,6 @@ impl<R: Renderer> Papers<R> {
     }
 
     fn submit(&self, req: Request) -> Box<Future<Item = Response, Error = Error>> {
-        log_request(&self.config.logger, &req);
         debug!(self.config.logger, "{:#?}", req);
 
         if let Err(error) = self.check_auth_header(&req) {
@@ -113,7 +111,6 @@ impl<R: Renderer> Papers<R> {
     }
 
     fn preview(&self, req: Request) -> Box<Future<Item = Response, Error = Error>> {
-        log_request(&self.config.logger, &req);
         debug!(self.config.logger, "{:#?}", req);
 
         if let Err(error) = self.check_auth_header(&req) {
@@ -155,8 +152,7 @@ impl<R: Renderer> Papers<R> {
 
     }
 
-    fn health_check(&self, req: Request) -> Box<Future<Item = Response, Error = Error>> {
-        log_request(&self.config.logger, &req);
+    fn health_check(&self, _: Request) -> Box<Future<Item = Response, Error = Error>> {
         Box::new(ok(Response::new().with_status(StatusCode::Ok)))
     }
 }
@@ -168,13 +164,13 @@ impl<R: Renderer> Service for Papers<R> {
     type Future = Box<Future<Item = Response, Error = hyper::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
+        log_request(&self.config.logger, &req);
         let response = match (req.method(), req.path()) {
                 (&Get, "/healthz") |
                 (&Head, "/healthz") => self.health_check(req),
                 (&Post, "/preview") => self.preview(req),
                 (&Post, "/submit") => self.submit(req),
                 _ => {
-                    log_request(&self.config.logger, &req);
                     Box::new(ok(Response::new().with_status(StatusCode::NotFound)))
                 }
             }
