@@ -2,8 +2,6 @@
 ///! template from the local directory, and receives the PDF from the callback endpoint.
 
 extern crate futures;
-#[macro_use]
-extern crate lazy_static;
 extern crate multipart;
 extern crate papers;
 extern crate tokio_core;
@@ -11,7 +9,6 @@ extern crate tera;
 #[macro_use]
 extern crate serde_json as json;
 
-use futures::Future;
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -44,8 +41,6 @@ fn render(document_spec: DocumentSpec) {
 }
 
 fn main() {
-    let core = tokio_core::reactor::Core::new().unwrap();
-
     let variables: json::Value = if let Ok(file) = File::open("variables.json") {
         let bytes: Vec<u8> = file.bytes().collect::<Result<Vec<u8>, _>>().unwrap();
         json::from_slice(&bytes).expect("variables.json is not valid JSON")

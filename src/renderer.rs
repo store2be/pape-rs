@@ -3,9 +3,7 @@ use futures::future;
 use futures::Future;
 use hyper;
 use hyper::{Response, Request, Uri};
-use hyper::client::Client;
 use hyper::server::Service;
-use hyper_tls::HttpsConnector;
 use mktemp::Temp;
 use std::io::prelude::*;
 use std::path::Path;
@@ -19,18 +17,6 @@ use papers::DocumentSpec;
 use error::{Error, ErrorKind};
 use config::Config;
 
-pub trait FromHandle: Clone {
-    fn build(handle: &Handle) -> Self;
-}
-
-impl FromHandle for Client<HttpsConnector> {
-    fn build(handle: &Handle) -> Self {
-        Client::configure()
-            .connector(https_connector(handle))
-            .build(handle)
-    }
-}
-
 fn extract_filename_from_uri(uri: &Uri) -> Option<String> {
     match uri.path().split('/').last() {
         Some(name) if !name.is_empty() => Some(name.to_string()),
@@ -40,7 +26,7 @@ fn extract_filename_from_uri(uri: &Uri) -> Option<String> {
 
 #[derive(Debug)]
 pub struct Renderer<S>
-    where S: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle + 'static
+    where S: Service<Request=Request, Response=Response, Error=hyper::Error> + Clone + 'static
 {
     config: &'static Config,
     handle: Handle,
@@ -48,7 +34,7 @@ pub struct Renderer<S>
 }
 
 impl<S> Renderer<S>
-    where S: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle + 'static
+    where S: Service<Request=Request, Response=Response, Error=hyper::Error> + Clone + 'static
 {
     fn get_template(&self, template_url: &Uri) -> Box<Future<
         Item=hyper::client::Response,
@@ -57,11 +43,11 @@ impl<S> Renderer<S>
         self.client.clone().get_follow_redirect(template_url)
     }
 
-    pub fn new(config: &'static Config, handle: &Handle) -> Self {
+    pub fn new(config: &'static Config, handle: &Handle, client: S) -> Self {
         Renderer {
+            client,
             config,
             handle: handle.clone(),
-            client: S::build(handle),
         }
     }
 
@@ -164,8 +150,8 @@ impl<S> Renderer<S>
         let files_written = {
             let logger = logger.clone();
             let temp_dir_path = temp_dir_path.clone();
-            let handle = handle.clone();
             let max_asset_size = max_asset_size;
+            let client = self.client.clone();
             written_template_path.and_then(move |_| {
                 debug!(logger, "Downloading assets {:?}", assets_urls);
                 let futures = assets_urls
@@ -173,11 +159,9 @@ impl<S> Renderer<S>
                     .map(move |uri| {
                         let logger = logger.clone();
                         let mut path = temp_dir_path.clone();
+                        let client = client.clone();
 
-                        let response = Client::configure()
-                            .connector(https_connector(&handle))
-                            .build(&handle)
-                            .get_follow_redirect(&uri.0);
+                        let response = client.get_follow_redirect(&uri.0);
 
                         let body = response.and_then(move |res| {
                             let filename = res.filename();
@@ -244,8 +228,8 @@ impl<S> Renderer<S>
         // Then post a multipart request from the generated PDF
         let callback_response = {
             let logger = logger.clone();
-            let handle = handle.clone();
             let callback_url = callback_url.clone();
+            let client = self.client.clone();
             output_path
                 .and_then(move |pdf_path| {
                               debug!(logger, "Reading the pdf from {:?}", pdf_path);
@@ -258,11 +242,7 @@ impl<S> Renderer<S>
                     // Avoid dir being dropped early
                     let _dir = dir;
 
-                    Client::configure()
-                        .connector(https_connector(&handle))
-                        .build(&handle)
-                        .request(req)
-                        .map_err(Error::from)
+                    client.call(req).map_err(Error::from)
                 })
         };
 
@@ -291,11 +271,12 @@ impl<S> Renderer<S>
         // Report errors to the callback url
         let handle_errors = {
             let logger = logger.clone();
+            let client = self.client.clone();
             res.or_else(move |error| {
                             error!(logger, format!("{}", error));
                             let req = Request::new(hyper::Method::Post, callback_url.0);
-                            Client::new(&handle)
-                                .request(multipart_request_with_error(req, &error).unwrap())
+                            client
+                                .call(multipart_request_with_error(req, &error).unwrap())
                                 .map(|_| ())
                         })
         };

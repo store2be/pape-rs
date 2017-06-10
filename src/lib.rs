@@ -41,7 +41,7 @@ pub mod test_utils;
 pub mod prelude {
     pub use config::Config;
     pub use error::{Error, ErrorKind};
-    pub use papers::{DocumentSpec, Papers, PapersUri};
-    pub use renderer::{FromHandle, Renderer};
+    pub use papers::{FromHandle, DocumentSpec, Papers, PapersUri};
+    pub use renderer::Renderer;
     pub use server::Server;
 }

@@ -4,18 +4,32 @@ use futures::future::{Future, ok, err, result};
 use futures::sync::oneshot;
 use hyper;
 use hyper::{Get, Post, Head, StatusCode};
+use hyper::client::Client;
 use hyper::server::{Request, Response, Service, NewService};
 use hyper::header::{Authorization, Bearer};
+use hyper_tls::HttpsConnector;
 use serde_json;
 use slog;
 use std::marker::PhantomData;
-use tokio_core::reactor::Remote;
+use tokio_core::reactor::{Remote, Handle};
 
 use http::*;
 use error::{Error, ErrorKind};
 pub use self::document_spec::{DocumentSpec, PapersUri};
-use renderer::{FromHandle, Renderer};
+use renderer::Renderer;
 use config::Config;
+
+pub trait FromHandle: Clone {
+    fn build(handle: &Handle) -> Self;
+}
+
+impl FromHandle for Client<HttpsConnector> {
+    fn build(handle: &Handle) -> Self {
+        Client::configure()
+            .connector(https_connector(handle))
+            .build(handle)
+    }
+}
 
 pub fn log_request(logger: &slog::Logger, req: &Request) {
     info!(
@@ -103,11 +117,10 @@ impl<C> Papers<C>
             let remote = self.remote.clone();
             document_spec.and_then(move |document_spec| {
                                        remote.spawn(move |handle| {
-                                                        Renderer::<C>::new(
-                                                            config,
-                                                            handle,
-                                                        ).render(document_spec)
-                                                    });
+                                           let client = C::build(&handle);
+                                           Renderer::new(config, handle, client)
+                                               .render(document_spec)
+                                       });
                                        ok(Response::new().with_status(StatusCode::Ok))
                                    })
         };
@@ -139,9 +152,10 @@ impl<C> Papers<C>
             document_spec
                 .and_then(move |document_spec| {
                               remote.spawn(move |handle| {
-                                               Renderer::<C>::new(config, handle)
-                                                   .preview(document_spec, sender)
-                                           });
+                                  let client = C::build(&handle);
+                                  Renderer::new(config, handle, client)
+                                      .preview(document_spec, sender)
+                              });
                               ok(())
                           })
                 .and_then(move |_| receiver.map_err(|err| panic!(err)))

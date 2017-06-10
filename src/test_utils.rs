@@ -2,7 +2,7 @@ use futures::future::*;
 use hyper;
 use hyper::{Response, Request};
 use hyper::server::Service;
-use renderer::FromHandle;
+use papers::FromHandle;
 use tokio_core::reactor::Handle;
 
 /// A service that should never be called. This is meant for testing.
