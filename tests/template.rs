@@ -32,6 +32,7 @@ hello, world
 \end{document}
 ";
 
+#[derive(Debug, Clone)]
 struct MockServer;
 
 impl FromHandle for MockServer {
@@ -71,7 +72,7 @@ fn test_simple_template_preview() {
         static ref CONFIG: Config = Config::from_env();
     }
 
-    let papers: Papers<ConcreteRenderer<MockServer>> = Papers::new(core.remote(), &CONFIG);
+    let papers: Papers<MockServer> = Papers::new(core.remote(), &CONFIG);
     let response = papers.call(request).map_err(|_| ());
     let (body, status) = core.run(response.and_then(|response| {
                                                         let status = response.status();

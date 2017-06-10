@@ -14,7 +14,7 @@ use tokio_core::reactor::Remote;
 use http::*;
 use error::{Error, ErrorKind};
 pub use self::document_spec::{DocumentSpec, PapersUri};
-use renderer::Renderer;
+use renderer::{FromHandle, Renderer};
 use config::Config;
 
 pub fn log_request(logger: &slog::Logger, req: &Request) {
@@ -27,16 +27,18 @@ pub fn log_request(logger: &slog::Logger, req: &Request) {
     );
 }
 
-pub struct Papers<R>
-    where R: Renderer
+pub struct Papers<C>
+    where C: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle + 'static
 {
     remote: Remote,
     config: &'static Config,
-    _renderer: PhantomData<R>,
+    _renderer: PhantomData<C>,
 }
 
-impl<R: Renderer> Papers<R> {
-    pub fn new(remote: Remote, config: &'static Config) -> Papers<R> {
+impl<C> Papers<C>
+    where C: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle + 'static
+{
+    pub fn new(remote: Remote, config: &'static Config) -> Papers<C> {
         Papers {
             remote,
             config,
@@ -101,7 +103,10 @@ impl<R: Renderer> Papers<R> {
             let remote = self.remote.clone();
             document_spec.and_then(move |document_spec| {
                                        remote.spawn(move |handle| {
-                                                        R::new(config, handle).render(document_spec)
+                                                        Renderer::<C>::new(
+                                                            config,
+                                                            handle,
+                                                        ).render(document_spec)
                                                     });
                                        ok(Response::new().with_status(StatusCode::Ok))
                                    })
@@ -134,7 +139,8 @@ impl<R: Renderer> Papers<R> {
             document_spec
                 .and_then(move |document_spec| {
                               remote.spawn(move |handle| {
-                                               R::new(config, handle).preview(document_spec, sender)
+                                               Renderer::<C>::new(config, handle)
+                                                   .preview(document_spec, sender)
                                            });
                               ok(())
                           })
@@ -157,7 +163,9 @@ impl<R: Renderer> Papers<R> {
     }
 }
 
-impl<R: Renderer> Service for Papers<R> {
+impl<C> Service for Papers<C>
+    where C: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle + 'static
+{
     type Request = Request;
     type Response = Response;
     type Error = hyper::Error;
@@ -181,11 +189,13 @@ impl<R: Renderer> Service for Papers<R> {
     }
 }
 
-impl<R: Renderer> NewService for Papers<R> {
+impl<C> NewService for Papers<C>
+    where C: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle + 'static
+{
     type Request = Request;
     type Response = Response;
     type Error = hyper::Error;
-    type Instance = Papers<R>;
+    type Instance = Papers<C>;
 
     fn new_service(&self) -> Result<Self::Instance, ::std::io::Error> {
         Ok(Papers {

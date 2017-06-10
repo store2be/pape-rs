@@ -13,7 +13,7 @@ use hyper::Method::Post;
 use hyper::header::{Authorization, Bearer};
 use papers::config::Config;
 use papers::papers::Papers;
-use papers::renderer::NoopRenderer;
+use papers::test_utils::NoopService;
 use papers::http::RequestExt;
 
 fn config_with_auth() -> &'static Config {
@@ -39,7 +39,7 @@ fn config_empty_auth() -> &'static Config {
 fn test_submit_ignore_auth_when_bearer_not_set() {
     let core = tokio_core::reactor::Core::new().unwrap();
     let request = Request::new(Post, "http://127.0.0.1:38018/submit".parse().unwrap());
-    let service: Papers<NoopRenderer> = Papers::new(core.remote(), config_empty_auth());
+    let service: Papers<NoopService> = Papers::new(core.remote(), config_empty_auth());
     let response = service.call(request).wait().unwrap();
     // 422 error code here because there is no POST body
     assert_eq!(response.status(), hyper::StatusCode::UnprocessableEntity);
@@ -49,7 +49,7 @@ fn test_submit_ignore_auth_when_bearer_not_set() {
 fn test_submit_fails_when_auth_is_expected_but_missing() {
     let core = tokio_core::reactor::Core::new().unwrap();
     let request = Request::new(Post, "http://127.0.0.1:38019/submit".parse().unwrap());
-    let service: Papers<NoopRenderer> = Papers::new(core.remote(), config_with_auth());
+    let service: Papers<NoopService> = Papers::new(core.remote(), config_with_auth());
     let response = service.call(request).wait().unwrap();
     assert_eq!(response.status(), hyper::StatusCode::Forbidden);
 }
@@ -59,7 +59,7 @@ fn test_submit_fails_if_auth_header_does_not_match_env_var() {
     let core = tokio_core::reactor::Core::new().unwrap();
     let request = Request::new(Post, "http://127.0.0.1:38021/submit".parse().unwrap())
         .with_header(Authorization(Bearer { token: "other-string".to_string() }));
-    let service: Papers<NoopRenderer> = Papers::new(core.remote(), config_with_auth());
+    let service: Papers<NoopService> = Papers::new(core.remote(), config_with_auth());
     let response = service.call(request).wait().unwrap();
     assert_eq!(response.status(), hyper::StatusCode::Forbidden);
 }
@@ -69,7 +69,7 @@ fn test_submit_succeeds_if_auth_header_matches_env_var() {
     let core = tokio_core::reactor::Core::new().unwrap();
     let request = Request::new(Post, "http://127.0.0.1:38020/submit".parse().unwrap())
         .with_header(Authorization(Bearer { token: "secret-string".to_string() }));
-    let service: Papers<NoopRenderer> = Papers::new(core.remote(), config_with_auth());
+    let service: Papers<NoopService> = Papers::new(core.remote(), config_with_auth());
     let response = service.call(request).wait().unwrap();
     assert_eq!(response.status(), hyper::StatusCode::UnprocessableEntity);
 }
@@ -79,7 +79,7 @@ fn test_preview_fails_if_auth_header_does_not_match_env_var() {
     let core = tokio_core::reactor::Core::new().unwrap();
     let request = Request::new(Post, "http://127.0.0.1:38022/preview".parse().unwrap())
         .with_header(Authorization(Bearer { token: "other-string".to_string() }));
-    let service: Papers<NoopRenderer> = Papers::new(core.remote(), config_with_auth());
+    let service: Papers<NoopService> = Papers::new(core.remote(), config_with_auth());
     let response = service.call(request).wait().unwrap();
     assert_eq!(response.status(), hyper::StatusCode::Forbidden);
 }
@@ -89,7 +89,7 @@ fn test_preview_succeeds_if_auth_header_matches_env_var() {
     let core = tokio_core::reactor::Core::new().unwrap();
     let request = Request::new(Post, "http://127.0.0.1:38023/preview".parse().unwrap())
         .with_header(Authorization(Bearer { token: "secret-string".to_string() }));
-    let service: Papers<NoopRenderer> = Papers::new(core.remote(), config_with_auth());
+    let service: Papers<NoopService> = Papers::new(core.remote(), config_with_auth());
     let response = service.call(request).wait().unwrap();
     assert_eq!(response.status(), hyper::StatusCode::UnprocessableEntity);
 }
