@@ -170,9 +170,7 @@ impl<R: Renderer> Service for Papers<R> {
                 (&Head, "/healthz") => self.health_check(req),
                 (&Post, "/preview") => self.preview(req),
                 (&Post, "/submit") => self.submit(req),
-                _ => {
-                    Box::new(ok(Response::new().with_status(StatusCode::NotFound)))
-                }
+                _ => Box::new(ok(Response::new().with_status(StatusCode::NotFound))),
             }
             .then(|handler_result| match handler_result {
                       Ok(response) => ok(response),

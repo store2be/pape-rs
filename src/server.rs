@@ -1,7 +1,7 @@
 use papers::Papers;
 
 use futures::future;
-use futures::{Future, Stream};
+use futures::Stream;
 use hyper::Client;
 use hyper::server::{Http, NewService};
 use hyper_tls::HttpsConnector;
@@ -51,13 +51,13 @@ impl Server {
                           future::ok(())
                       });
 
-        core.run(future::ok(info!(self.config
-                                      .logger
-                                      .new(o!("version" => env!("CARGO_PKG_VERSION"))),
-                                  "Server started on http://{}",
-                                  socket_addr))
-                         .and_then(|_| work))
-            .unwrap()
+        info!(self.config
+                  .logger
+                  .new(o!("version" => env!("CARGO_PKG_VERSION"))),
+              "Server started on http://{}",
+              socket_addr);
+
+        core.run(work).unwrap()
     }
 }
 
