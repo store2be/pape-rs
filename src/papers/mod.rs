@@ -60,7 +60,7 @@ impl<C> Papers<C>
         }
     }
 
-    // Check Authorization header if `PAPERS_BEARER` env var is set
+// Check Authorization header if `PAPERS_BEARER` env var is set
     fn check_auth_header(&self, req: &Request) -> Result<(), Error> {
         let headers = req.headers().clone();
         let authorization = headers.get::<Authorization<Bearer>>();

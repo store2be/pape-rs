@@ -26,7 +26,7 @@ fn extract_filename_from_uri(uri: &Uri) -> Option<String> {
 
 #[derive(Debug)]
 pub struct Renderer<S>
-    where S: Service<Request=Request, Response=Response, Error=hyper::Error> + Clone + 'static
+    where S: Service<Request = Request, Response = Response, Error = hyper::Error> + Clone + 'static
 {
     config: &'static Config,
     handle: Handle,
@@ -34,12 +34,11 @@ pub struct Renderer<S>
 }
 
 impl<S> Renderer<S>
-    where S: Service<Request=Request, Response=Response, Error=hyper::Error> + Clone + 'static
+    where S: Service<Request = Request, Response = Response, Error = hyper::Error> + Clone + 'static
 {
-    fn get_template(&self, template_url: &Uri) -> Box<Future<
-        Item=hyper::client::Response,
-        Error=Error>
-    > {
+    fn get_template(&self,
+                    template_url: &Uri)
+                    -> Box<Future<Item = hyper::client::Response, Error = Error>> {
         self.client.clone().get_follow_redirect(template_url)
     }
 
@@ -52,9 +51,9 @@ impl<S> Renderer<S>
     }
 
     pub fn preview(&self,
-               document_spec: DocumentSpec,
-               sender: oneshot::Sender<Result<String, Error>>)
-               -> Box<Future<Item = (), Error = ()>> {
+                   document_spec: DocumentSpec,
+                   sender: oneshot::Sender<Result<String, Error>>)
+                   -> Box<Future<Item = (), Error = ()>> {
         let DocumentSpec {
             variables,
             template_url,
@@ -239,11 +238,11 @@ impl<S> Renderer<S>
                                                           pdf_path)
                           })
                 .and_then(move |req| {
-                    // Avoid dir being dropped early
-                    let _dir = dir;
+                              // Avoid dir being dropped early
+                              let _dir = dir;
 
-                    client.call(req).map_err(Error::from)
-                })
+                              client.call(req).map_err(Error::from)
+                          })
         };
 
         let response_bytes = {
