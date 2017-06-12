@@ -4,18 +4,32 @@ use futures::future::{Future, ok, err, result};
 use futures::sync::oneshot;
 use hyper;
 use hyper::{Get, Post, Head, StatusCode};
+use hyper::client::Client;
 use hyper::server::{Request, Response, Service, NewService};
 use hyper::header::{Authorization, Bearer};
+use hyper_tls::HttpsConnector;
 use serde_json;
 use slog;
 use std::marker::PhantomData;
-use tokio_core::reactor::Remote;
+use tokio_core::reactor::{Remote, Handle};
 
 use http::*;
 use error::{Error, ErrorKind};
 pub use self::document_spec::{DocumentSpec, PapersUri};
 use renderer::Renderer;
 use config::Config;
+
+pub trait FromHandle: Clone {
+    fn build(handle: &Handle) -> Self;
+}
+
+impl FromHandle for Client<HttpsConnector> {
+    fn build(handle: &Handle) -> Self {
+        Client::configure()
+            .connector(https_connector(handle))
+            .build(handle)
+    }
+}
 
 pub fn log_request(logger: &slog::Logger, req: &Request) {
     info!(
@@ -27,16 +41,18 @@ pub fn log_request(logger: &slog::Logger, req: &Request) {
     );
 }
 
-pub struct Papers<R>
-    where R: Renderer
+pub struct Papers<C>
+    where C: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle + 'static
 {
     remote: Remote,
     config: &'static Config,
-    _renderer: PhantomData<R>,
+    _renderer: PhantomData<C>,
 }
 
-impl<R: Renderer> Papers<R> {
-    pub fn new(remote: Remote, config: &'static Config) -> Papers<R> {
+impl<C> Papers<C>
+    where C: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle + 'static
+{
+    pub fn new(remote: Remote, config: &'static Config) -> Papers<C> {
         Papers {
             remote,
             config,
@@ -44,7 +60,7 @@ impl<R: Renderer> Papers<R> {
         }
     }
 
-    // Check Authorization header if `PAPERS_BEARER` env var is set
+// Check Authorization header if `PAPERS_BEARER` env var is set
     fn check_auth_header(&self, req: &Request) -> Result<(), Error> {
         let headers = req.headers().clone();
         let authorization = headers.get::<Authorization<Bearer>>();
@@ -101,8 +117,10 @@ impl<R: Renderer> Papers<R> {
             let remote = self.remote.clone();
             document_spec.and_then(move |document_spec| {
                                        remote.spawn(move |handle| {
-                                                        R::new(config, handle).render(document_spec)
-                                                    });
+                                           let client = C::build(&handle);
+                                           Renderer::new(config, handle, client)
+                                               .render(document_spec)
+                                       });
                                        ok(Response::new().with_status(StatusCode::Ok))
                                    })
         };
@@ -134,8 +152,10 @@ impl<R: Renderer> Papers<R> {
             document_spec
                 .and_then(move |document_spec| {
                               remote.spawn(move |handle| {
-                                               R::new(config, handle).preview(document_spec, sender)
-                                           });
+                                  let client = C::build(&handle);
+                                  Renderer::new(config, handle, client)
+                                      .preview(document_spec, sender)
+                              });
                               ok(())
                           })
                 .and_then(move |_| receiver.map_err(|err| panic!(err)))
@@ -157,7 +177,9 @@ impl<R: Renderer> Papers<R> {
     }
 }
 
-impl<R: Renderer> Service for Papers<R> {
+impl<C> Service for Papers<C>
+    where C: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle + 'static
+{
     type Request = Request;
     type Response = Response;
     type Error = hyper::Error;
@@ -181,11 +203,13 @@ impl<R: Renderer> Service for Papers<R> {
     }
 }
 
-impl<R: Renderer> NewService for Papers<R> {
+impl<C> NewService for Papers<C>
+    where C: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle + 'static
+{
     type Request = Request;
     type Response = Response;
     type Error = hyper::Error;
-    type Instance = Papers<R>;
+    type Instance = Papers<C>;
 
     fn new_service(&self) -> Result<Self::Instance, ::std::io::Error> {
         Ok(Papers {

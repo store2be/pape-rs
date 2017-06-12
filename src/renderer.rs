@@ -3,12 +3,9 @@ use futures::future;
 use futures::Future;
 use hyper;
 use hyper::{Response, Request, Uri};
-use hyper::client::Client;
 use hyper::server::Service;
-use hyper_tls::HttpsConnector;
 use mktemp::Temp;
 use std::io::prelude::*;
-use std::marker::PhantomData;
 use std::path::Path;
 use std::process::Command;
 use tokio_core::reactor::Handle;
@@ -20,18 +17,6 @@ use papers::DocumentSpec;
 use error::{Error, ErrorKind};
 use config::Config;
 
-pub trait FromHandle {
-    fn build(handle: &Handle) -> Self;
-}
-
-impl FromHandle for Client<HttpsConnector> {
-    fn build(handle: &Handle) -> Self {
-        Client::configure()
-            .connector(https_connector(handle))
-            .build(handle)
-    }
-}
-
 fn extract_filename_from_uri(uri: &Uri) -> Option<String> {
     match uri.path().split('/').last() {
         Some(name) if !name.is_empty() => Some(name.to_string()),
@@ -39,50 +24,36 @@ fn extract_filename_from_uri(uri: &Uri) -> Option<String> {
     }
 }
 
-pub trait Renderer {
-    fn new(config: &'static Config, handle: &Handle) -> Self;
-    fn preview(&self,
-               d: DocumentSpec,
-               sender: oneshot::Sender<Result<String, Error>>)
-               -> Box<Future<Item = (), Error = ()>>;
-    fn render(&self, d: DocumentSpec) -> Box<Future<Item = (), Error = ()>>;
-}
-
-#[derive(Clone, Debug)]
-pub struct ConcreteRenderer<S>
-    where S: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle + 'static
+#[derive(Debug)]
+pub struct Renderer<S>
+    where S: Service<Request = Request, Response = Response, Error = hyper::Error> + Clone + 'static
 {
     config: &'static Config,
     handle: Handle,
-    _client: PhantomData<S>,
+    client: S,
 }
 
-impl<S> ConcreteRenderer<S>
-    where S: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle + 'static
+impl<S> Renderer<S>
+    where S: Service<Request = Request, Response = Response, Error = hyper::Error> + Clone + 'static
 {
-    fn get_template(&self, template_url: &Uri) -> Box<Future<
-        Item=hyper::client::Response,
-        Error=Error>
-    > {
-        S::build(&self.handle).get_follow_redirect(template_url)
+    fn get_template(&self,
+                    template_url: &Uri)
+                    -> Box<Future<Item = hyper::client::Response, Error = Error>> {
+        self.client.clone().get_follow_redirect(template_url)
     }
-}
 
-impl<S> Renderer for ConcreteRenderer<S>
-    where S: Service<Request = Request, Response = Response, Error = hyper::Error> + FromHandle
-{
-    fn new(config: &'static Config, handle: &Handle) -> Self {
-        ConcreteRenderer {
+    pub fn new(config: &'static Config, handle: &Handle, client: S) -> Self {
+        Renderer {
+            client,
             config,
             handle: handle.clone(),
-            _client: PhantomData,
         }
     }
 
-    fn preview(&self,
-               document_spec: DocumentSpec,
-               sender: oneshot::Sender<Result<String, Error>>)
-               -> Box<Future<Item = (), Error = ()>> {
+    pub fn preview(&self,
+                   document_spec: DocumentSpec,
+                   sender: oneshot::Sender<Result<String, Error>>)
+                   -> Box<Future<Item = (), Error = ()>> {
         let DocumentSpec {
             variables,
             template_url,
@@ -108,7 +79,7 @@ impl<S> Renderer for ConcreteRenderer<S>
     // Since `mktemp::Temp` implements Drop by deleting the directory, we don't need to worry about
     // leaving files or directories behind. On the flipside, we must ensure it is not dropped before
     // the last returned future that needs the directory finishes.
-    fn render(&self, document_spec: DocumentSpec) -> Box<Future<Item = (), Error = ()>> {
+    pub fn render(&self, document_spec: DocumentSpec) -> Box<Future<Item = (), Error = ()>> {
         let dir = Temp::new_dir();
 
         if let Err(err) = dir {
@@ -178,8 +149,8 @@ impl<S> Renderer for ConcreteRenderer<S>
         let files_written = {
             let logger = logger.clone();
             let temp_dir_path = temp_dir_path.clone();
-            let handle = handle.clone();
             let max_asset_size = max_asset_size;
+            let client = self.client.clone();
             written_template_path.and_then(move |_| {
                 debug!(logger, "Downloading assets {:?}", assets_urls);
                 let futures = assets_urls
@@ -187,11 +158,9 @@ impl<S> Renderer for ConcreteRenderer<S>
                     .map(move |uri| {
                         let logger = logger.clone();
                         let mut path = temp_dir_path.clone();
+                        let client = client.clone();
 
-                        let response = Client::configure()
-                            .connector(https_connector(&handle))
-                            .build(&handle)
-                            .get_follow_redirect(&uri.0);
+                        let response = client.get_follow_redirect(&uri.0);
 
                         let body = response.and_then(move |res| {
                             let filename = res.filename();
@@ -258,8 +227,8 @@ impl<S> Renderer for ConcreteRenderer<S>
         // Then post a multipart request from the generated PDF
         let callback_response = {
             let logger = logger.clone();
-            let handle = handle.clone();
             let callback_url = callback_url.clone();
+            let client = self.client.clone();
             output_path
                 .and_then(move |pdf_path| {
                               debug!(logger, "Reading the pdf from {:?}", pdf_path);
@@ -269,15 +238,11 @@ impl<S> Renderer for ConcreteRenderer<S>
                                                           pdf_path)
                           })
                 .and_then(move |req| {
-                    // Avoid dir being dropped early
-                    let _dir = dir;
+                              // Avoid dir being dropped early
+                              let _dir = dir;
 
-                    Client::configure()
-                        .connector(https_connector(&handle))
-                        .build(&handle)
-                        .request(req)
-                        .map_err(Error::from)
-                })
+                              client.call(req).map_err(Error::from)
+                          })
         };
 
         let response_bytes = {
@@ -305,11 +270,12 @@ impl<S> Renderer for ConcreteRenderer<S>
         // Report errors to the callback url
         let handle_errors = {
             let logger = logger.clone();
+            let client = self.client.clone();
             res.or_else(move |error| {
                             error!(logger, format!("{}", error));
                             let req = Request::new(hyper::Method::Post, callback_url.0);
-                            Client::new(&handle)
-                                .request(multipart_request_with_error(req, &error).unwrap())
+                            client
+                                .call(multipart_request_with_error(req, &error).unwrap())
                                 .map(|_| ())
                         })
         };
@@ -317,90 +283,6 @@ impl<S> Renderer for ConcreteRenderer<S>
         Box::new(handle_errors.map_err(|_| ()))
     }
 }
-
-/// Meant for use in papers-local
-pub struct LocalRenderer;
-
-impl Renderer for LocalRenderer {
-    fn new(_: &'static Config, _: &Handle) -> Self {
-        LocalRenderer
-    }
-
-    fn preview(&self,
-               _: DocumentSpec,
-               _: oneshot::Sender<Result<String, Error>>)
-               -> Box<Future<Item = (), Error = ()>> {
-        unimplemented!();
-    }
-
-    fn render(&self, document_spec: DocumentSpec) -> Box<Future<Item = (), Error = ()>> {
-        let DocumentSpec { variables, .. } = document_spec;
-        let template_string = ::std::fs::File::open("template.tex")
-            .expect("could not open template.tex")
-            .bytes()
-            .collect::<Result<Vec<u8>, _>>()
-            .unwrap();
-        let template_string = String::from_utf8(template_string).unwrap();
-        let rendered_template = Tera::one_off(&template_string, &variables, false)
-            .expect("failed to render the template");
-        let mut rendered_template_file = ::std::fs::File::create("rendered.tex")
-            .expect("could not create rendered.tex");
-        rendered_template_file
-            .write_all(rendered_template.as_bytes())
-            .unwrap();
-        let output = Command::new("xelatex")
-            .arg("-interaction=nonstopmode")
-            .arg("-file-line-error")
-            .arg("-shell-restricted")
-            .arg("rendered.tex")
-            .output()
-            .expect("latex error")
-            .stdout;
-        println!("{}", String::from_utf8(output).unwrap());
-        Box::new(future::ok(()))
-    }
-}
-
-/// A renderer that should never be called. This is meant for testing.
-pub struct NilRenderer;
-
-impl Renderer for NilRenderer {
-    fn new(_: &'static Config, _: &Handle) -> Self {
-        unimplemented!();
-    }
-
-    fn preview(&self,
-               _: DocumentSpec,
-               _: oneshot::Sender<Result<String, Error>>)
-               -> Box<Future<Item = (), Error = ()>> {
-        unimplemented!();
-    }
-
-    fn render(&self, _: DocumentSpec) -> Box<Future<Item = (), Error = ()>> {
-        unimplemented!();
-    }
-}
-
-/// A renderer that does nothing. Meant for testing.
-pub struct NoopRenderer;
-
-impl Renderer for NoopRenderer {
-    fn new(_: &'static Config, _: &Handle) -> Self {
-        NoopRenderer
-    }
-
-    fn preview(&self,
-               _: DocumentSpec,
-               _: oneshot::Sender<Result<String, Error>>)
-               -> Box<Future<Item = (), Error = ()>> {
-        Box::new(future::ok(()))
-    }
-
-    fn render(&self, _: DocumentSpec) -> Box<Future<Item = (), Error = ()>> {
-        Box::new(future::ok(()))
-    }
-}
-
 
 #[cfg(test)]
 mod tests {

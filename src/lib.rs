@@ -36,11 +36,12 @@ mod human_size;
 pub mod papers;
 pub mod renderer;
 pub mod server;
+pub mod test_utils;
 
 pub mod prelude {
     pub use config::Config;
     pub use error::{Error, ErrorKind};
-    pub use papers::{DocumentSpec, Papers, PapersUri};
-    pub use renderer::{FromHandle, Renderer, ConcreteRenderer, NoopRenderer, NilRenderer};
+    pub use papers::{FromHandle, DocumentSpec, Papers, PapersUri};
+    pub use renderer::Renderer;
     pub use server::Server;
 }
