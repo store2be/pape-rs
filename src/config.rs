@@ -8,8 +8,10 @@ fn max_assets_per_document(logger: &slog::Logger) -> u8 {
     match ::std::env::var("PAPERS_MAX_ASSETS_PER_DOCUMENT").map(|max| max.parse()) {
         Ok(Ok(max)) => max,
         Ok(Err(_)) => {
-            warn!(logger,
-                  "Unable to parse PAPERS_MAX_ASSETS_PER_DOCUMENT environmental variable");
+            warn!(
+                logger,
+                "Unable to parse PAPERS_MAX_ASSETS_PER_DOCUMENT environmental variable"
+            );
             default
         }
         _ => default,
@@ -53,8 +55,10 @@ impl Config {
             Level::Info
         };
         let drain = slog_term::streamer().full().build().fuse();
-        let drain = Filter::new(drain,
-                                move |record| record.level().is_at_least(minimum_level));
+        let drain = Filter::new(
+            drain,
+            move |record| record.level().is_at_least(minimum_level),
+        );
         let logger = slog::Logger::root(drain, o!());
 
         let max_assets_per_document = max_assets_per_document(&logger);

@@ -25,11 +25,11 @@ fn test_assets_exceed_max_length() {
     }
 
     std::thread::spawn(|| {
-                           papers::server::Server::new()
-                               .with_port(8049)
-                               .with_config(&CONFIG)
-                               .start();
-                       });
+        papers::server::Server::new()
+            .with_port(8049)
+            .with_config(&CONFIG)
+            .start();
+    });
 
     std::thread::sleep(std::time::Duration::from_millis(20));
 
@@ -47,23 +47,21 @@ fn test_assets_exceed_max_length() {
         }
     }"#;
 
-    let request: Request<hyper::Body> =
-        Request::new(hyper::Method::Post,
-                     "http://127.0.0.1:8049/submit".parse().unwrap())
-                .with_body(document_spec.into())
-                .with_header(ContentType(mime!(Application / Json)));
+    let request: Request<hyper::Body> = Request::new(
+        hyper::Method::Post,
+        "http://127.0.0.1:8049/submit".parse().unwrap(),
+    ).with_body(document_spec.into())
+        .with_header(ContentType(mime!(Application / Json)));
 
-    let test = test_client
-        .request(request)
-        .and_then(|res| {
-            let status = res.status();
-            res.body()
-                .fold(Vec::new(), |mut acc, chunk| {
-                    acc.extend_from_slice(&chunk);
-                    future::ok::<_, hyper::Error>(acc)
-                })
-                .map(move |body| (status, body))
-        });
+    let test = test_client.request(request).and_then(|res| {
+        let status = res.status();
+        res.body()
+            .fold(Vec::new(), |mut acc, chunk| {
+                acc.extend_from_slice(&chunk);
+                future::ok::<_, hyper::Error>(acc)
+            })
+            .map(move |body| (status, body))
+    });
 
     // Request
     let tests = test.map_err(|_| ());

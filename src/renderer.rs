@@ -26,7 +26,8 @@ fn extract_filename_from_uri(uri: &Uri) -> Option<String> {
 
 #[derive(Debug)]
 pub struct Renderer<S>
-    where S: Service<Request = Request, Response = Response, Error = hyper::Error> + Clone + 'static
+where
+    S: Service<Request = Request, Response = Response, Error = hyper::Error> + Clone + 'static,
 {
     config: &'static Config,
     handle: Handle,
@@ -34,11 +35,15 @@ pub struct Renderer<S>
 }
 
 impl<S> Renderer<S>
-    where S: Service<Request = Request, Response = Response, Error = hyper::Error> + Clone + 'static
+where
+    S: Service<Request = Request, Response = Response, Error = hyper::Error>
+        + Clone
+        + 'static,
 {
-    fn get_template(&self,
-                    template_url: &Uri)
-                    -> Box<Future<Item = hyper::client::Response, Error = Error>> {
+    fn get_template(
+        &self,
+        template_url: &Uri,
+    ) -> Box<Future<Item = hyper::client::Response, Error = Error>> {
         self.client.clone().get_follow_redirect(template_url)
     }
 
@@ -50,10 +55,11 @@ impl<S> Renderer<S>
         }
     }
 
-    pub fn preview(&self,
-                   document_spec: DocumentSpec,
-                   sender: oneshot::Sender<Result<String, Error>>)
-                   -> Box<Future<Item = (), Error = ()>> {
+    pub fn preview(
+        &self,
+        document_spec: DocumentSpec,
+        sender: oneshot::Sender<Result<String, Error>>,
+    ) -> Box<Future<Item = (), Error = ()>> {
         let DocumentSpec {
             variables,
             template_url,
@@ -62,13 +68,12 @@ impl<S> Renderer<S>
         let response = self.get_template(&template_url.0);
         let max_asset_size = self.config.max_asset_size;
         let bytes = response.and_then(move |res| res.get_body_bytes_with_limit(max_asset_size));
-        let template_string =
-            bytes.and_then(|bytes| ::std::string::String::from_utf8(bytes).map_err(Error::from));
-        let rendered =
-            template_string.and_then(move |template_string| {
-                                         Tera::one_off(&template_string, &variables, false)
-                                             .map_err(Error::from)
-                                     });
+        let template_string = bytes.and_then(|bytes| {
+            ::std::string::String::from_utf8(bytes).map_err(Error::from)
+        });
+        let rendered = template_string.and_then(move |template_string| {
+            Tera::one_off(&template_string, &variables, false).map_err(Error::from)
+        });
         let work = rendered
             .then(|rendered| sender.send(rendered))
             .map(|_| ())
@@ -91,14 +96,18 @@ impl<S> Renderer<S>
 
         let temp_dir_path = dir.to_path_buf();
         let mut template_path = temp_dir_path.clone();
-        template_path.push(Path::new(&document_spec.output_filename.replace("pdf", "tex")));
+        template_path.push(Path::new(
+            &document_spec.output_filename.replace("pdf", "tex"),
+        ));
         let max_asset_size = self.config.max_asset_size;
         let handle = self.handle.clone();
         let logger = self.config.logger.clone();
 
-        debug!(logger,
-               "Trying to generate PDF with document spec: {:?}",
-               document_spec);
+        debug!(
+            logger,
+            "Trying to generate PDF with document spec: {:?}",
+            document_spec
+        );
 
         let DocumentSpec {
             assets_urls,
@@ -119,16 +128,14 @@ impl<S> Renderer<S>
         let template_string = {
             let logger = logger.clone();
             bytes.and_then(move |bytes| {
-                               debug!(logger, "Successfully downloaded the template");
-                               String::from_utf8(bytes).map_err(Error::from)
-                           })
+                debug!(logger, "Successfully downloaded the template");
+                String::from_utf8(bytes).map_err(Error::from)
+            })
         };
 
-        let rendered_template =
-            template_string.and_then(move |template_string| {
-                                         Tera::one_off(&template_string, &variables, false)
-                                             .map_err(Error::from)
-                                     });
+        let rendered_template = template_string.and_then(move |template_string| {
+            Tera::one_off(&template_string, &variables, false).map_err(Error::from)
+        });
 
         let written_template_path = {
             let logger = logger.clone();
@@ -138,9 +145,11 @@ impl<S> Renderer<S>
                 let mut file = ::std::fs::File::create(&template_path).unwrap();
                 file.write_all(latex_string.as_bytes())
                     .expect("could not write latex file");
-                debug!(logger,
-                       "Template successfully written to {:?}",
-                       &template_path);
+                debug!(
+                    logger,
+                    "Template successfully written to {:?}",
+                    &template_path
+                );
                 Ok(template_path)
             })
         };
@@ -153,35 +162,32 @@ impl<S> Renderer<S>
             let client = self.client.clone();
             written_template_path.and_then(move |_| {
                 debug!(logger, "Downloading assets {:?}", assets_urls);
-                let futures = assets_urls
-                    .into_iter()
-                    .map(move |uri| {
-                        let logger = logger.clone();
-                        let mut path = temp_dir_path.clone();
-                        let client = client.clone();
+                let futures = assets_urls.into_iter().map(move |uri| {
+                    let logger = logger.clone();
+                    let mut path = temp_dir_path.clone();
+                    let client = client.clone();
 
-                        let response = client.get_follow_redirect(&uri.0);
+                    let response = client.get_follow_redirect(&uri.0);
 
-                        let body = response.and_then(move |res| {
-                            let filename = res.filename();
-                            res.get_body_bytes_with_limit(max_asset_size)
-                                .map(|bytes| (bytes, filename))
-                        });
-                        body.and_then(move |(bytes, filename)| {
-                            let filename =
-                                filename.or_else(|| extract_filename_from_uri(&uri.0));
-                            match filename {
-                                Some(filename) => {
-                                    path.push(filename);
-                                    debug!(logger, "Writing asset {:?} as {:?}", uri, path);
-                                    ::std::fs::File::create(&path)
-                                        .and_then(|mut file| file.write_all(&bytes))
-                                        .map_err(Error::from)
-                                }
-                                _ => Ok(()),
-                            }
-                        })
+                    let body = response.and_then(move |res| {
+                        let filename = res.filename();
+                        res.get_body_bytes_with_limit(max_asset_size)
+                            .map(|bytes| (bytes, filename))
                     });
+                    body.and_then(move |(bytes, filename)| {
+                        let filename = filename.or_else(|| extract_filename_from_uri(&uri.0));
+                        match filename {
+                            Some(filename) => {
+                                path.push(filename);
+                                debug!(logger, "Writing asset {:?} as {:?}", uri, path);
+                                ::std::fs::File::create(&path)
+                                    .and_then(|mut file| file.write_all(&bytes))
+                                    .map_err(Error::from)
+                            }
+                            _ => Ok(()),
+                        }
+                    })
+                });
                 future::join_all(futures)
             })
         };
@@ -217,11 +223,11 @@ impl<S> Renderer<S>
                     }
                 })
                 .map(move |_| {
-                         // Construct the path to the generated PDF
-                         let mut path = temp_dir_path;
-                         path.push(Path::new(&output_filename));
-                         path
-                     })
+                    // Construct the path to the generated PDF
+                    let mut path = temp_dir_path;
+                    path.push(Path::new(&output_filename));
+                    path
+                })
         };
 
         // Then post a multipart request from the generated PDF
@@ -231,27 +237,30 @@ impl<S> Renderer<S>
             let client = self.client.clone();
             output_path
                 .and_then(move |pdf_path| {
-                              debug!(logger, "Reading the pdf from {:?}", pdf_path);
-                              debug!(logger, "Sending generated PDF to {}", callback_url.0);
-                              multipart_request_with_file(Request::new(hyper::Method::Post,
-                                                                       callback_url.0),
-                                                          pdf_path)
-                          })
+                    debug!(logger, "Reading the pdf from {:?}", pdf_path);
+                    debug!(logger, "Sending generated PDF to {}", callback_url.0);
+                    multipart_request_with_file(
+                        Request::new(hyper::Method::Post, callback_url.0),
+                        pdf_path,
+                    )
+                })
                 .and_then(move |req| {
-                              // Avoid dir being dropped early
-                              let _dir = dir;
+                    // Avoid dir being dropped early
+                    let _dir = dir;
 
-                              client.call(req).map_err(Error::from)
-                          })
+                    client.call(req).map_err(Error::from)
+                })
         };
 
         let response_bytes = {
             let logger = logger.clone();
             let max_asset_size = max_asset_size;
             callback_response.and_then(move |response| {
-                info!(logger,
-                      "Callback response: {}",
-                      response.status().canonical_reason().unwrap_or("unknown"));
+                info!(
+                    logger,
+                    "Callback response: {}",
+                    response.status().canonical_reason().unwrap_or("unknown")
+                );
 
                 response.get_body_bytes_with_limit(max_asset_size)
             })
@@ -260,9 +269,11 @@ impl<S> Renderer<S>
         let res = {
             let logger = logger.clone();
             response_bytes.and_then(move |bytes| {
-                debug!(logger,
-                       "Callback response body: {:?}",
-                       ::std::str::from_utf8(&bytes).unwrap_or("<binary content>"));
+                debug!(
+                    logger,
+                    "Callback response body: {:?}",
+                    ::std::str::from_utf8(&bytes).unwrap_or("<binary content>")
+                );
                 future::ok(())
             })
         };
@@ -272,12 +283,12 @@ impl<S> Renderer<S>
             let logger = logger.clone();
             let client = self.client.clone();
             res.or_else(move |error| {
-                            error!(logger, format!("{}", error));
-                            let req = Request::new(hyper::Method::Post, callback_url.0);
-                            client
-                                .call(multipart_request_with_error(req, &error).unwrap())
-                                .map(|_| ())
-                        })
+                error!(logger, format!("{}", error));
+                let req = Request::new(hyper::Method::Post, callback_url.0);
+                client
+                    .call(multipart_request_with_error(req, &error).unwrap())
+                    .map(|_| ())
+            })
         };
 
         Box::new(handle_errors.map_err(|_| ()))
@@ -293,8 +304,10 @@ mod tests {
     fn test_extract_filename_from_uri_works() {
         let assert_extracted = |input: &'static str, expected_output: Option<&'static str>| {
             let uri = input.parse::<Uri>().unwrap();
-            assert_eq!(extract_filename_from_uri(&uri),
-                       expected_output.map(|o| o.to_string()));
+            assert_eq!(
+                extract_filename_from_uri(&uri),
+                expected_output.map(|o| o.to_string())
+            );
         };
 
         assert_extracted("/logo.png", Some("logo.png"));

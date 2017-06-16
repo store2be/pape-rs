@@ -3,8 +3,10 @@ use serde_json as json;
 use chrono::UTC;
 
 #[derive(Clone, Deserialize, Serialize, Debug)]
-pub struct PapersUri(#[serde(with = "uri_deserializer")]
-                     pub Uri);
+pub struct PapersUri(
+    #[serde(with = "uri_deserializer")]
+    pub Uri
+);
 
 /// See https://serde.rs/custom-date-format.html for the custom deserialization.
 /// An alternative design would be making a newtype containing an Uri and implementing Deserialize
@@ -26,13 +28,15 @@ mod uri_deserializer {
     use serde::{self, Deserialize, Deserializer, Serializer};
 
     pub fn serialize<S>(uri: &Uri, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer
+    where
+        S: Serializer,
     {
         serializer.serialize_str(&format!("{}", uri))
     }
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Uri, D::Error>
-        where D: Deserializer<'de>
+    where
+        D: Deserializer<'de>,
     {
         let uri_string = String::deserialize(deserializer)?;
         uri_string.parse().map_err(serde::de::Error::custom)

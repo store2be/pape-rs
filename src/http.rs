@@ -38,9 +38,8 @@ pub trait ServerRequestExt {
 
 impl ServerRequestExt for server::Request {
     fn get_body_bytes(self) -> Box<Future<Item = Vec<u8>, Error = Error>> {
-        Box::new(self.body()
-                     .map_err(Error::from)
-                     .fold(Vec::new(), |mut acc, chunk| {
+        Box::new(self.body().map_err(Error::from).fold(Vec::new(), |mut acc,
+         chunk| {
             acc.extend_from_slice(&chunk);
             future::ok::<_, Error>(acc)
         }))
@@ -71,17 +70,18 @@ pub trait ResponseExt {
 
 impl ResponseExt for Response {
     fn get_body_bytes_with_limit(self, limit: u32) -> Box<Future<Item = Vec<u8>, Error = Error>> {
-        Box::new(self.body()
-                     .from_err()
-                     .fold(Vec::<u8>::new(), move |mut acc, chunk| {
+        Box::new(self.body().from_err().fold(
+            Vec::<u8>::new(),
+            move |mut acc, chunk| {
 
-            if (acc.len() + chunk.len()) > limit as usize {
-                return future::err(ErrorKind::UnprocessableEntity.into());
-            }
+                if (acc.len() + chunk.len()) > limit as usize {
+                    return future::err(ErrorKind::UnprocessableEntity.into());
+                }
 
-            acc.extend_from_slice(&chunk);
-            future::ok::<_, Error>(acc)
-        }))
+                acc.extend_from_slice(&chunk);
+                future::ok::<_, Error>(acc)
+            },
+        ))
     }
 
     fn filename(&self) -> Option<String> {
@@ -90,23 +90,24 @@ impl ResponseExt for Response {
                 params
                     .iter()
                     .find(|param| match **param {
-                              DispositionParam::Filename(_, _, _) => true,
-                              _ => false,
-                          })
-                    .and_then(|param| if let DispositionParam::Filename(_, _, ref bytes) = *param {
-                                  String::from_utf8(bytes.to_owned()).ok()
-                              } else {
-                                  None
-                              })
+                        DispositionParam::Filename(_, _, _) => true,
+                        _ => false,
+                    })
+                    .and_then(|param| {
+                        if let DispositionParam::Filename(_, _, ref bytes) = *param {
+                            String::from_utf8(bytes.to_owned()).ok()
+                        } else {
+                            None
+                        }
+                    })
             }
             _ => None,
         }
     }
 
     fn get_body_bytes(self) -> Box<Future<Item = Vec<u8>, Error = Error>> {
-        Box::new(self.body()
-                     .map_err(Error::from)
-                     .fold(Vec::new(), |mut acc, chunk| {
+        Box::new(self.body().map_err(Error::from).fold(Vec::new(), |mut acc,
+         chunk| {
             acc.extend_from_slice(&chunk);
             future::ok::<_, Error>(acc)
         }))
@@ -140,20 +141,22 @@ pub trait ClientExt {
 }
 
 impl<S> ClientExt for S
-    where S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static
+where
+    S: Service<Request = Request, Response = Response, Error = hyper::Error>
+        + 'static,
 {
     fn get_follow_redirect(self, uri: &Uri) -> Box<Future<Item = Response, Error = Error>> {
         Box::new(future::loop_fn(uri.clone(), move |uri| {
             let request = Request::new(hyper::Method::Get, uri);
-            self.call(request)
-                .map_err(Error::from)
-                .and_then(|res| match determine_get_result(res) {
-                              Ok(GetResult::Redirect(redirect_uri)) => {
-                                  Ok(future::Loop::Continue(redirect_uri))
-                              }
-                              Ok(GetResult::Ok(res)) => Ok(future::Loop::Break(res)),
-                              Err(err) => Err(err),
-                          })
+            self.call(request).map_err(Error::from).and_then(|res| {
+                match determine_get_result(res) {
+                    Ok(GetResult::Redirect(redirect_uri)) => {
+                        Ok(future::Loop::Continue(redirect_uri))
+                    }
+                    Ok(GetResult::Ok(res)) => Ok(future::Loop::Break(res)),
+                    Err(err) => Err(err),
+                }
+            })
         }))
     }
 }
@@ -176,18 +179,19 @@ fn determine_get_result(res: Response) -> Result<GetResult> {
     }
 }
 
-pub fn multipart_request_with_file(request: Request,
-                                   path: PathBuf)
-                                   -> ::std::result::Result<Request, Error> {
+pub fn multipart_request_with_file(
+    request: Request,
+    path: PathBuf,
+) -> ::std::result::Result<Request, Error> {
     let mut fields = lazy::Multipart::new()
         .add_file("file", path)
         .prepare_threshold(Some(u64::max_value() - 1))
         .map_err(|_| "Failed to prepare multipart body")?;
     let mut bytes: Vec<u8> = Vec::new();
     fields.read_to_end(&mut bytes)?;
-    Ok(request
-           .with_body(bytes.into())
-           .with_header(ContentType(mime!(Multipart/FormData; Boundary=(fields.boundary())))))
+    Ok(request.with_body(bytes.into()).with_header(ContentType(
+        mime!(Multipart/FormData; Boundary=(fields.boundary())),
+    )))
 }
 
 pub fn multipart_request_with_error(request: Request, error: &Error) -> Result<Request> {
@@ -197,9 +201,9 @@ pub fn multipart_request_with_error(request: Request, error: &Error) -> Result<R
         .map_err(|_| "Failed to prepare multipart body")?;
     let mut bytes: Vec<u8> = Vec::new();
     fields.read_to_end(&mut bytes)?;
-    Ok(request
-           .with_body(bytes.into())
-           .with_header(ContentType(mime!(Multipart/FormData; Boundary=(fields.boundary())))))
+    Ok(request.with_body(bytes.into()).with_header(ContentType(
+        mime!(Multipart/FormData; Boundary=(fields.boundary())),
+    )))
 }
 
 #[derive(Debug)]
@@ -211,9 +215,11 @@ impl multipart::server::HttpRequest for MultipartRequest {
     fn multipart_boundary(&self) -> Option<&str> {
         let content_type = self.0.get::<ContentType>();
         match content_type {
-            Some(&ContentType(mime::Mime(mime::TopLevel::Multipart,
-                                         mime::SubLevel::FormData,
-                                         ref params))) => {
+            Some(
+                &ContentType(
+                    mime::Mime(mime::TopLevel::Multipart, mime::SubLevel::FormData, ref params),
+                ),
+            ) => {
                 // param is (attr, value)
                 params
                     .iter()
@@ -242,8 +248,9 @@ mod tests {
     }
 
     impl MockServer {
-        fn respond_to_logo_png_with(content_disposition: hyper::header::ContentDisposition)
-                                    -> MockServer {
+        fn respond_to_logo_png_with(
+            content_disposition: hyper::header::ContentDisposition,
+        ) -> MockServer {
             MockServer { response_to_logo_png: content_disposition }
         }
     }
@@ -273,62 +280,82 @@ mod tests {
     fn test_filename_prefers_content_disposition() {
         let response_header = hyper::header::ContentDisposition {
             disposition: hyper::header::DispositionType::Attachment,
-            parameters: vec![hyper::header::DispositionParam::Filename(
-                hyper::header::Charset::Ext("UTF-8".to_string()),
-                None,
-                b"this_should_be_the_filename.png".to_vec())],
+            parameters: vec![
+                hyper::header::DispositionParam::Filename(
+                    hyper::header::Charset::Ext("UTF-8".to_string()),
+                    None,
+                    b"this_should_be_the_filename.png".to_vec()
+                ),
+            ],
         };
         let server = MockServer::respond_to_logo_png_with(response_header);
 
         let request: hyper::client::Request<hyper::Body> =
-            Request::new(hyper::Method::Get,
-                         "http://127.0.0.1:8738/assets/logo.png".parse().unwrap());
+            Request::new(
+                hyper::Method::Get,
+                "http://127.0.0.1:8738/assets/logo.png".parse().unwrap(),
+            );
 
         let response = server.call(request).wait().unwrap();
-        assert_eq!(response.filename(),
-                   Some("this_should_be_the_filename.png".to_string()))
+        assert_eq!(
+            response.filename(),
+            Some("this_should_be_the_filename.png".to_string())
+        )
     }
 
     #[test]
     fn test_filename_works_with_content_disposition_inline() {
         let response_header = hyper::header::ContentDisposition {
             disposition: hyper::header::DispositionType::Inline,
-            parameters: vec![hyper::header::DispositionParam::Filename(
+            parameters: vec![
+                hyper::header::DispositionParam::Filename(
                     hyper::header::Charset::Ext("UTF-8".to_string()),
                     None,
-                    b"this_should_be_the_filename.png".to_vec())],
+                    b"this_should_be_the_filename.png".to_vec()
+                ),
+            ],
         };
 
         let server = MockServer::respond_to_logo_png_with(response_header);
 
         let request: hyper::client::Request<hyper::Body> =
-            Request::new(hyper::Method::Get,
-                         "http://127.0.0.1:8738/assets/logo.png".parse().unwrap());
+            Request::new(
+                hyper::Method::Get,
+                "http://127.0.0.1:8738/assets/logo.png".parse().unwrap(),
+            );
 
         let response = server.call(request).wait().unwrap();
-        assert_eq!(response.filename(),
-                   Some("this_should_be_the_filename.png".to_string()))
+        assert_eq!(
+            response.filename(),
+            Some("this_should_be_the_filename.png".to_string())
+        )
     }
 
     // S3 returns Content-Disposition without disposition (just filename)
     #[test]
     fn test_content_disposition_works_without_disposition() {
         let server = MockServer::respond_to_logo_png_with(hyper::header::ContentDisposition {
-                disposition: hyper::header::DispositionType::Ext("".to_string()),
-                parameters: vec![hyper::header::DispositionParam::Filename(
+            disposition: hyper::header::DispositionType::Ext("".to_string()),
+            parameters: vec![
+                hyper::header::DispositionParam::Filename(
                     hyper::header::Charset::Ext("UTF-8".to_string()),
                     None,
-                    b"this_should_be_the_filename.png".to_vec(),
-                    )],
+                    b"this_should_be_the_filename.png".to_vec()
+                ),
+            ],
         });
 
         let request: hyper::client::Request<hyper::Body> =
-            Request::new(hyper::Method::Get,
-                         "http://127.0.0.1:8740/assets/logo.png".parse().unwrap());
+            Request::new(
+                hyper::Method::Get,
+                "http://127.0.0.1:8740/assets/logo.png".parse().unwrap(),
+            );
 
         let response = server.call(request).wait().unwrap();
-        assert_eq!(response.filename(),
-                   Some("this_should_be_the_filename.png".to_string()))
+        assert_eq!(
+            response.filename(),
+            Some("this_should_be_the_filename.png".to_string())
+        )
     }
 
     struct MockFileServer;
