@@ -123,7 +123,7 @@ where
             let remote = self.remote.clone();
             document_spec.and_then(move |document_spec| {
                 remote.spawn(move |handle| {
-                    let client = C::build(&handle);
+                    let client = C::build(handle);
                     Renderer::new(config, handle, client).render(document_spec)
                 });
                 ok(Response::new().with_status(StatusCode::Ok))
@@ -159,7 +159,7 @@ where
             document_spec
                 .and_then(move |document_spec| {
                     remote.spawn(move |handle| {
-                        let client = C::build(&handle);
+                        let client = C::build(handle);
                         Renderer::new(config, handle, client).preview(document_spec, sender)
                     });
                     ok(())
