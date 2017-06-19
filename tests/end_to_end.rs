@@ -52,11 +52,13 @@ impl server::Service for MockServer {
             _ => server::Response::new().with_status(hyper::StatusCode::NotFound),
 
         };
-        Box::new(self.sender
-                     .clone()
-                     .send(req)
-                     .map(|_| res)
-                     .map_err(|_| hyper::Error::Incomplete))
+        Box::new(
+            self.sender
+                .clone()
+                .send(req)
+                .map(|_| res)
+                .map_err(|_| hyper::Error::Incomplete),
+        )
     }
 }
 
@@ -64,13 +66,15 @@ impl server::Service for MockServer {
 fn test_end_to_end() {
     let (sender, receiver) = mpsc::channel(30);
 
-    let _join_mock =
-        std::thread::spawn(|| { papers::server::Server::new().with_port(8019).start(); });
+    let _join_mock = std::thread::spawn(|| {
+        papers::server::Server::new().with_port(8019).start();
+    });
 
     let _join_papers = std::thread::spawn(move || {
         hyper::server::Http::new()
-            .bind(&"127.0.0.1:8733".parse().unwrap(),
-                  move || Ok(MockServer::new(sender.clone())))
+            .bind(&"127.0.0.1:8733".parse().unwrap(), move || {
+                Ok(MockServer::new(sender.clone()))
+            })
             .unwrap()
             .run()
             .unwrap();
@@ -92,40 +96,39 @@ fn test_end_to_end() {
         }
     }"#;
 
-    let request: Request<hyper::Body> =
-        Request::new(hyper::Method::Post,
-                     "http://127.0.0.1:8019/submit".parse().unwrap())
-                .with_body(document_spec.into())
-                .with_header(ContentType(mime!(Application / Json)));
+    let request: Request<hyper::Body> = Request::new(
+        hyper::Method::Post,
+        "http://127.0.0.1:8019/submit".parse().unwrap(),
+    ).with_body(document_spec.into())
+        .with_header(ContentType(mime!(Application / Json)));
 
-    let test = test_client
-        .request(request)
-        .and_then(|res| {
-            let status = res.status();
-            res.body()
-                .fold(Vec::new(), |mut acc, chunk| {
-                    acc.extend_from_slice(&chunk);
-                    future::ok::<_, hyper::Error>(acc)
-                })
-                .map(move |body| (status, body))
-        });
+    let test = test_client.request(request).and_then(|res| {
+        let status = res.status();
+        res.body()
+            .fold(Vec::new(), |mut acc, chunk| {
+                acc.extend_from_slice(&chunk);
+                future::ok::<_, hyper::Error>(acc)
+            })
+            .map(move |body| (status, body))
+    });
 
     let expected_requests: Vec<Result<(&'static str, hyper::Method), ()>> =
-        vec![("/template", hyper::Method::Get),
-             ("/assets/logo.png", hyper::Method::Get),
-             ("/callback", hyper::Method::Post)]
-                .into_iter()
-                .map(Ok)
-                .collect();
+        vec![
+            ("/template", hyper::Method::Get),
+            ("/assets/logo.png", hyper::Method::Get),
+            ("/callback", hyper::Method::Post),
+        ].into_iter()
+            .map(Ok)
+            .collect();
 
     let expectations = receiver
         .take(expected_requests.len() as u64)
         .zip(futures::stream::iter(expected_requests))
         .for_each(|(request, schema)| {
-                      assert_eq!(request.path(), schema.0);
-                      assert_eq!(request.method(), &schema.1);
-                      future::ok(())
-                  });
+            assert_eq!(request.path(), schema.0);
+            assert_eq!(request.method(), &schema.1);
+            future::ok(())
+        });
 
     // Request + expectations
     let tests = test.map_err(|_| ())

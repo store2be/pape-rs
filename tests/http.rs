@@ -23,8 +23,10 @@ fn config() -> &'static Config {
 fn test_health_check() {
     let core = tokio_core::reactor::Core::new().unwrap();
     let service: Papers<NilService> = Papers::new(core.remote(), config());
-    let request = Request::new(hyper::Method::Get,
-                               "http://127.0.0.1:8018/healthz".parse().unwrap());
+    let request = Request::new(
+        hyper::Method::Get,
+        "http://127.0.0.1:8018/healthz".parse().unwrap(),
+    );
     let response = service.call(request).wait().unwrap();
     assert_eq!(response.status(), hyper::StatusCode::Ok);
 }
@@ -33,8 +35,10 @@ fn test_health_check() {
 fn test_404() {
     let core = tokio_core::reactor::Core::new().unwrap();
     let service: Papers<NilService> = Papers::new(core.remote(), config());
-    let request = Request::new(hyper::Method::Get,
-                               "http://127.0.0.1:8018/dead-end".parse().unwrap());
+    let request = Request::new(
+        hyper::Method::Get,
+        "http://127.0.0.1:8018/dead-end".parse().unwrap(),
+    );
     let response = service.call(request).wait().unwrap();
     assert_eq!(response.status(), hyper::StatusCode::NotFound);
 }

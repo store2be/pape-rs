@@ -42,7 +42,8 @@ pub fn log_request(logger: &slog::Logger, req: &Request) {
 }
 
 pub struct Papers<C>
-    where C: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle + 'static
+where
+    C: Service<Request = Request, Response = Response, Error = hyper::Error> + FromHandle + 'static,
 {
     remote: Remote,
     config: &'static Config,
@@ -50,7 +51,10 @@ pub struct Papers<C>
 }
 
 impl<C> Papers<C>
-    where C: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle + 'static
+where
+    C: Service<Request = Request, Response = Response, Error = hyper::Error>
+        + FromHandle
+        + 'static,
 {
     pub fn new(remote: Remote, config: &'static Config) -> Papers<C> {
         Papers {
@@ -60,7 +64,7 @@ impl<C> Papers<C>
         }
     }
 
-// Check Authorization header if `PAPERS_BEARER` env var is set
+    // Check Authorization header if `PAPERS_BEARER` env var is set
     fn check_auth_header(&self, req: &Request) -> Result<(), Error> {
         let headers = req.headers().clone();
         let authorization = headers.get::<Authorization<Bearer>>();
@@ -93,8 +97,10 @@ impl<C> Papers<C>
         let body = req.get_body_bytes();
 
         let document_spec = body.and_then(|body| {
-            result(serde_json::from_slice::<DocumentSpec>(body.as_slice())
-                       .map_err(|err| Error::with_chain(err, ErrorKind::UnprocessableEntity)))
+            result(
+                serde_json::from_slice::<DocumentSpec>(body.as_slice())
+                    .map_err(|err| Error::with_chain(err, ErrorKind::UnprocessableEntity)),
+            )
         });
 
         let logger = self.config.logger.clone();
@@ -116,13 +122,12 @@ impl<C> Papers<C>
             let config = self.config;
             let remote = self.remote.clone();
             document_spec.and_then(move |document_spec| {
-                                       remote.spawn(move |handle| {
-                                           let client = C::build(&handle);
-                                           Renderer::new(config, handle, client)
-                                               .render(document_spec)
-                                       });
-                                       ok(Response::new().with_status(StatusCode::Ok))
-                                   })
+                remote.spawn(move |handle| {
+                    let client = C::build(handle);
+                    Renderer::new(config, handle, client).render(document_spec)
+                });
+                ok(Response::new().with_status(StatusCode::Ok))
+            })
         };
 
         Box::new(response)
@@ -141,8 +146,10 @@ impl<C> Papers<C>
 
         let body = req.get_body_bytes();
         let document_spec = body.and_then(|body| {
-            result(serde_json::from_slice::<DocumentSpec>(body.as_slice())
-                       .map_err(|_| ErrorKind::UnprocessableEntity.into()))
+            result(
+                serde_json::from_slice::<DocumentSpec>(body.as_slice())
+                    .map_err(|_| ErrorKind::UnprocessableEntity.into()),
+            )
         });
 
         let preview = {
@@ -151,22 +158,23 @@ impl<C> Papers<C>
             let (sender, receiver) = oneshot::channel();
             document_spec
                 .and_then(move |document_spec| {
-                              remote.spawn(move |handle| {
-                                  let client = C::build(&handle);
-                                  Renderer::new(config, handle, client)
-                                      .preview(document_spec, sender)
-                              });
-                              ok(())
-                          })
+                    remote.spawn(move |handle| {
+                        let client = C::build(handle);
+                        Renderer::new(config, handle, client).preview(document_spec, sender)
+                    });
+                    ok(())
+                })
                 .and_then(move |_| receiver.map_err(|err| panic!(err)))
                 .flatten()
         };
 
         let response = preview.and_then(|populated_template| {
-                                            ok(Response::new()
-                                                   .with_status(StatusCode::Ok)
-                                                   .with_body(populated_template))
-                                        });
+            ok(
+                Response::new()
+                    .with_status(StatusCode::Ok)
+                    .with_body(populated_template),
+            )
+        });
 
         Box::new(response)
 
@@ -178,7 +186,10 @@ impl<C> Papers<C>
 }
 
 impl<C> Service for Papers<C>
-    where C: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle + 'static
+where
+    C: Service<Request = Request, Response = Response, Error = hyper::Error>
+        + FromHandle
+        + 'static,
 {
     type Request = Request;
     type Response = Response;
@@ -188,23 +199,29 @@ impl<C> Service for Papers<C>
     fn call(&self, req: Self::Request) -> Self::Future {
         log_request(&self.config.logger, &req);
         let response = match (req.method(), req.path()) {
-                (&Get, "/healthz") |
-                (&Head, "/healthz") => self.health_check(req),
-                (&Post, "/preview") => self.preview(req),
-                (&Post, "/submit") => self.submit(req),
-                _ => Box::new(ok(Response::new().with_status(StatusCode::NotFound))),
-            }
-            .then(|handler_result| match handler_result {
-                      Ok(response) => ok(response),
-                      Err(err) => ok(err.into_response()),
-                  });
+            (&Get, "/healthz") |
+            (&Head, "/healthz") => self.health_check(req),
+            (&Post, "/preview") => self.preview(req),
+            (&Post, "/submit") => self.submit(req),
+            _ => Box::new(ok(Response::new().with_status(StatusCode::NotFound))),
+        }.then(|handler_result| match handler_result {
+            Ok(response) => ok(response),
+            Err(err) => ok(err.into_response()),
+        });
 
         Box::new(response)
     }
 }
 
 impl<C> NewService for Papers<C>
-    where C: Service<Request=Request, Response=Response, Error=hyper::Error> + FromHandle + 'static
+where
+    C: Service<
+        Request = Request,
+        Response = Response,
+        Error = hyper::Error,
+    >
+        + FromHandle
+        + 'static,
 {
     type Request = Request;
     type Response = Response;
@@ -213,9 +230,9 @@ impl<C> NewService for Papers<C>
 
     fn new_service(&self) -> Result<Self::Instance, ::std::io::Error> {
         Ok(Papers {
-               remote: self.remote.clone(),
-               config: self.config,
-               _renderer: PhantomData,
-           })
+            remote: self.remote.clone(),
+            config: self.config,
+            _renderer: PhantomData,
+        })
     }
 }

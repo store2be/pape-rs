@@ -48,7 +48,9 @@ impl Service for MockServer {
     type Future = Box<Future<Item = server::Response, Error = hyper::Error>>;
 
     fn call(&self, _: Self::Request) -> Self::Future {
-        Box::new(future::ok(hyper::server::Response::new().with_body(TEMPLATE)))
+        Box::new(future::ok(
+            hyper::server::Response::new().with_body(TEMPLATE),
+        ))
     }
 }
 
@@ -62,10 +64,11 @@ fn test_simple_template_preview() {
         }
     }"#;
 
-    let request = Request::new(hyper::Method::Post,
-                               "http://127.0.0.1:8019/preview".parse().unwrap())
-            .with_body(document_spec.into())
-            .with_header(ContentType(mime!(Application / Json)));
+    let request = Request::new(
+        hyper::Method::Post,
+        "http://127.0.0.1:8019/preview".parse().unwrap(),
+    ).with_body(document_spec.into())
+        .with_header(ContentType(mime!(Application / Json)));
     let mut core = tokio_core::reactor::Core::new().unwrap();
 
     lazy_static! {
@@ -75,14 +78,15 @@ fn test_simple_template_preview() {
     let papers: Papers<MockServer> = Papers::new(core.remote(), &CONFIG);
     let response = papers.call(request).map_err(|_| ());
     let (body, status) = core.run(response.and_then(|response| {
-                                                        let status = response.status();
-                                                        response
-                                                            .get_body_bytes()
-                                                            .map(move |body| (body, status))
-                                                            .map_err(|_| ())
-                                                    }))
-        .unwrap();
+        let status = response.status();
+        response
+            .get_body_bytes()
+            .map(move |body| (body, status))
+            .map_err(|_| ())
+    })).unwrap();
     assert_eq!(status, hyper::StatusCode::Ok);
-    assert_eq!(::std::str::from_utf8(&body).unwrap(),
-               EXPECTED_TEMPLATE_RESULT);
+    assert_eq!(
+        ::std::str::from_utf8(&body).unwrap(),
+        EXPECTED_TEMPLATE_RESULT
+    );
 }
