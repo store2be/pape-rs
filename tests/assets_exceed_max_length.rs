@@ -1,8 +1,6 @@
 extern crate futures;
 #[macro_use]
 extern crate lazy_static;
-#[macro_use]
-extern crate mime;
 extern crate hyper;
 extern crate slog;
 extern crate tokio_core;
@@ -13,6 +11,7 @@ use futures::future;
 use futures::{Future, Stream};
 use hyper::client::{Client, Request};
 use hyper::header::ContentType;
+use hyper::mime;
 
 use papers::http::*;
 use papers::prelude::*;
@@ -51,7 +50,7 @@ fn test_assets_exceed_max_length() {
         hyper::Method::Post,
         "http://127.0.0.1:8049/submit".parse().unwrap(),
     ).with_body(document_spec.into())
-        .with_header(ContentType(mime!(Application / Json)));
+        .with_header(ContentType(mime::APPLICATION_JSON));
 
     let test = test_client.request(request).and_then(|res| {
         let status = res.status();

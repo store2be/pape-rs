@@ -1,22 +1,21 @@
 use error::*;
 use futures::future;
 use futures::{Future, Stream};
-use mime;
 use multipart;
 use hyper;
+use hyper::mime;
 use hyper_tls::HttpsConnector;
 use std::path::PathBuf;
 use hyper::server::{self, Service};
 use hyper::header::{Header, ContentDisposition, ContentType, DispositionParam};
 use hyper::{Request, Response};
-use multipart::client::lazy;
 use hyper::header::Location;
 use hyper::{Uri, StatusCode};
 use std::io::prelude::*;
 use tokio_core::reactor::Handle;
 
-pub fn https_connector(handle: &Handle) -> HttpsConnector {
-    HttpsConnector::new(4, handle)
+pub fn https_connector(handle: &Handle) -> HttpsConnector<hyper::client::HttpConnector> {
+    HttpsConnector::new(4, handle).unwrap()
 }
 
 pub trait ServerResponseExt {
@@ -34,6 +33,7 @@ impl ServerResponseExt for server::Response {
 pub trait ServerRequestExt {
     fn get_body_bytes(self) -> Box<Future<Item = Vec<u8>, Error = Error>>;
     fn has_content_type(&self, mime: mime::Mime) -> bool;
+    fn multipart_boundary(&self) -> Option<&str>;
 }
 
 impl ServerRequestExt for server::Request {
@@ -46,17 +46,34 @@ impl ServerRequestExt for server::Request {
     }
 
     fn has_content_type(&self, mime: mime::Mime) -> bool {
-        use mime::Mime;
-
         let content_type = self.headers().get::<ContentType>().cloned();
-        let Mime(top_level, sub_level, _) = mime;
 
-        if let Some(ContentType(Mime(found_top_level, found_sub_level, _))) = content_type {
-            found_top_level == top_level && found_sub_level == sub_level
+        if let Some(ContentType(header_mime)) = content_type {
+            mime == header_mime
         } else {
             false
         }
 
+    }
+
+    fn multipart_boundary(&self) -> Option<&str> {
+        let content_type = self.headers().get::<ContentType>();
+        match content_type {
+            Some(&ContentType(mime)) if mime.type_() == mime::MULTIPART && mime.subtype() == mime::FORM_DATA => {
+                unimplemented!()
+                    // &ContentType(
+                    //     mime::Mime(mime::TopLevel::Multipart, mime::SubLevel::FormData, ref params),
+                    // ),
+                    // ) => {
+                    // // param is (attr, value)
+                    // params
+                    //     .iter()
+                    //     .find(|param| param.0.as_str() == "boundary")
+                    //     .map(|param| param.1.as_str())
+                    // }
+            },
+            _ => None,
+        }
     }
 }
 
@@ -183,56 +200,38 @@ pub fn multipart_request_with_file(
     request: Request,
     path: PathBuf,
 ) -> ::std::result::Result<Request, Error> {
-    let mut fields = lazy::Multipart::new()
-        .add_file("file", path)
-        .prepare_threshold(Some(u64::max_value() - 1))
-        .map_err(|_| "Failed to prepare multipart body")?;
+    use std::io::Write;
+    let mut body = Vec::new();
+    let boundary = multipart::generate_boundary();
+    let file = multipart::FilePart::new(hyper::Headers::new(), &path);
+    multipart::write_multipart(&mut body, &boundary, multipart::Node::File(file))?;
+
+    // let mut fields = lazy::Multipart::new()
+    //     .add_file("file", path)
+    //     .prepare_threshold(Some(u64::max_value() - 1))
+    //     .map_err(|_| "Failed to prepare multipart body")?;
     let mut bytes: Vec<u8> = Vec::new();
-    fields.read_to_end(&mut bytes)?;
-    Ok(request.with_body(bytes.into()).with_header(ContentType(
-        mime!(Multipart/FormData; Boundary=(fields.boundary())),
-    )))
+    let content_type = ContentType(
+        format!("multipart/form-data; boundary={:b}", boundary)
+            .parse()?
+    );
+    Ok(request.with_body(body).with_header(content_type))
 }
 
-pub fn multipart_request_with_error(request: Request, error: &Error) -> Result<Request> {
-    let mut fields = lazy::Multipart::new()
-        .add_text("error", format!("{}", error))
-        .prepare()
-        .map_err(|_| "Failed to prepare multipart body")?;
-    let mut bytes: Vec<u8> = Vec::new();
-    fields.read_to_end(&mut bytes)?;
-    Ok(request.with_body(bytes.into()).with_header(ContentType(
-        mime!(Multipart/FormData; Boundary=(fields.boundary())),
-    )))
-}
+pub fn multipart_request_with_error(request: Request, error: &Error) -> ::std::result::Result<Request, Error> {
+    use std::io::Write;
 
-#[derive(Debug)]
-pub struct MultipartRequest(pub hyper::Headers, pub Vec<u8>);
-
-impl multipart::server::HttpRequest for MultipartRequest {
-    type Body = ::std::io::Cursor<Vec<u8>>;
-
-    fn multipart_boundary(&self) -> Option<&str> {
-        let content_type = self.0.get::<ContentType>();
-        match content_type {
-            Some(
-                &ContentType(
-                    mime::Mime(mime::TopLevel::Multipart, mime::SubLevel::FormData, ref params),
-                ),
-            ) => {
-                // param is (attr, value)
-                params
-                    .iter()
-                    .find(|param| param.0.as_str() == "boundary")
-                    .map(|param| param.1.as_str())
-            }
-            _ => None,
-        }
-    }
-
-    fn body(self) -> Self::Body {
-        ::std::io::Cursor::new(self.1)
-    }
+    let mut body = Vec::new();
+    let boundary = multipart::generate_boundary();
+    let content = multipart::Part {
+        headers: hyper::Headers::new(),
+        body: format!("{}", error).into_bytes(),
+    };
+    multipart::write_multipart(&mut body, &boundary, &vec![multipart::Node::Part(content)])?;
+    let content_type = ContentType(
+        format!("multipart/form-data; boundary={}", String::from_utf8(boundary).unwrap()).parse().unwrap()
+    );
+    Ok(request.with_body(body.into()).with_header(content_type))
 }
 
 #[cfg(test)]

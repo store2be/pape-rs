@@ -3,6 +3,7 @@ mod document_spec;
 use futures::future::{Future, ok, err, result};
 use futures::sync::oneshot;
 use hyper;
+use hyper::mime;
 use hyper::{Get, Post, Head, StatusCode};
 use hyper::client::Client;
 use hyper::server::{Request, Response, Service, NewService};
@@ -23,7 +24,7 @@ pub trait FromHandle: Clone {
     fn build(handle: &Handle) -> Self;
 }
 
-impl FromHandle for Client<HttpsConnector> {
+impl FromHandle for Client<HttpsConnector<hyper::client::HttpConnector>> {
     fn build(handle: &Handle) -> Self {
         Client::configure()
             .connector(https_connector(handle))
@@ -90,7 +91,7 @@ where
             return Box::new(err(error));
         }
 
-        if !req.has_content_type(mime!(Application / Json)) {
+        if !req.has_content_type(mime::APPLICATION_JSON) {
             return Box::new(err(ErrorKind::UnprocessableEntity.into()));
         }
 
@@ -140,7 +141,7 @@ where
             return Box::new(err(error));
         }
 
-        if !req.has_content_type(mime!(Application / Json)) {
+        if !req.has_content_type(mime::APPLICATION_JSON) {
             return Box::new(err(ErrorKind::UnprocessableEntity.into()));
         }
 

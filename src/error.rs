@@ -1,6 +1,7 @@
 use hyper;
 use hyper::server::Response;
 use hyper::StatusCode;
+use multipart;
 use tera;
 
 error_chain! {
@@ -13,11 +14,12 @@ error_chain! {
 
 
     foreign_links {
+        FromUtf8Error(::std::string::FromUtf8Error);
         Hyper(hyper::Error);
         Io(::std::io::Error);
+        MultipartError(multipart::Error);
         Tera(tera::Error);
         UriError(hyper::error::UriError);
-        FromUtf8Error(::std::string::FromUtf8Error);
     }
 
     errors {

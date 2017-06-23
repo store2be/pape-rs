@@ -1,6 +1,6 @@
 use hyper::Uri;
 use serde_json as json;
-use chrono::UTC;
+use chrono::prelude::*;
 
 #[derive(Clone, Deserialize, Serialize, Debug)]
 pub struct PapersUri(
@@ -48,7 +48,7 @@ fn default_assets() -> Vec<PapersUri> {
     Vec::new()
 }
 fn default_output_filename() -> String {
-    format!("out_{}.pdf", UTC::now().to_rfc3339())
+    format!("out_{}.pdf", Utc::now().to_rfc3339())
 }
 fn default_value() -> json::Value {
     json!({})
