@@ -38,11 +38,13 @@ pub trait ServerRequestExt {
 
 impl ServerRequestExt for server::Request {
     fn get_body_bytes(self) -> Box<Future<Item = Vec<u8>, Error = Error>> {
-        Box::new(self.body().map_err(Error::from).fold(Vec::new(), |mut acc,
-         chunk| {
-            acc.extend_from_slice(&chunk);
-            future::ok::<_, Error>(acc)
-        }))
+        Box::new(self.body().map_err(Error::from).fold(
+            Vec::new(),
+            |mut acc, chunk| {
+                acc.extend_from_slice(&chunk);
+                future::ok::<_, Error>(acc)
+            },
+        ))
     }
 
     fn has_content_type(&self, mime: mime::Mime) -> bool {
@@ -86,7 +88,10 @@ impl ResponseExt for Response {
 
     fn filename(&self) -> Option<String> {
         match self.headers().get::<ContentDisposition>() {
-            Some(&ContentDisposition { parameters: ref params, .. }) => {
+            Some(&ContentDisposition {
+                parameters: ref params,
+                ..
+            }) => {
                 params
                     .iter()
                     .find(|param| match **param {
@@ -106,11 +111,13 @@ impl ResponseExt for Response {
     }
 
     fn get_body_bytes(self) -> Box<Future<Item = Vec<u8>, Error = Error>> {
-        Box::new(self.body().map_err(Error::from).fold(Vec::new(), |mut acc,
-         chunk| {
-            acc.extend_from_slice(&chunk);
-            future::ok::<_, Error>(acc)
-        }))
+        Box::new(self.body().map_err(Error::from).fold(
+            Vec::new(),
+            |mut acc, chunk| {
+                acc.extend_from_slice(&chunk);
+                future::ok::<_, Error>(acc)
+            },
+        ))
     }
 }
 
@@ -142,21 +149,20 @@ pub trait ClientExt {
 
 impl<S> ClientExt for S
 where
-    S: Service<Request = Request, Response = Response, Error = hyper::Error>
-        + 'static,
+    S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static,
 {
     fn get_follow_redirect(self, uri: &Uri) -> Box<Future<Item = Response, Error = Error>> {
         Box::new(future::loop_fn(uri.clone(), move |uri| {
             let request = Request::new(hyper::Method::Get, uri);
-            self.call(request).map_err(Error::from).and_then(|res| {
-                match determine_get_result(res) {
+            self.call(request).map_err(Error::from).and_then(
+                |res| match determine_get_result(res) {
                     Ok(GetResult::Redirect(redirect_uri)) => {
                         Ok(future::Loop::Continue(redirect_uri))
                     }
                     Ok(GetResult::Ok(res)) => Ok(future::Loop::Break(res)),
                     Err(err) => Err(err),
-                }
-            })
+                },
+            )
         }))
     }
 }
@@ -168,8 +174,7 @@ enum GetResult {
 
 fn determine_get_result(res: Response) -> Result<GetResult> {
     match res.status() {
-        StatusCode::TemporaryRedirect |
-        StatusCode::PermanentRedirect => {
+        StatusCode::TemporaryRedirect | StatusCode::PermanentRedirect => {
             match res.headers().get::<Location>() {
                 Some(location) => Ok(GetResult::Redirect(location.parse()?)),
                 None => Err("Redirect without Location header".into()),
@@ -251,7 +256,9 @@ mod tests {
         fn respond_to_logo_png_with(
             content_disposition: hyper::header::ContentDisposition,
         ) -> MockServer {
-            MockServer { response_to_logo_png: content_disposition }
+            MockServer {
+                response_to_logo_png: content_disposition,
+            }
         }
     }
 
@@ -284,17 +291,16 @@ mod tests {
                 hyper::header::DispositionParam::Filename(
                     hyper::header::Charset::Ext("UTF-8".to_string()),
                     None,
-                    b"this_should_be_the_filename.png".to_vec()
+                    b"this_should_be_the_filename.png".to_vec(),
                 ),
             ],
         };
         let server = MockServer::respond_to_logo_png_with(response_header);
 
-        let request: hyper::client::Request<hyper::Body> =
-            Request::new(
-                hyper::Method::Get,
-                "http://127.0.0.1:8738/assets/logo.png".parse().unwrap(),
-            );
+        let request: hyper::client::Request<hyper::Body> = Request::new(
+            hyper::Method::Get,
+            "http://127.0.0.1:8738/assets/logo.png".parse().unwrap(),
+        );
 
         let response = server.call(request).wait().unwrap();
         assert_eq!(
@@ -311,18 +317,17 @@ mod tests {
                 hyper::header::DispositionParam::Filename(
                     hyper::header::Charset::Ext("UTF-8".to_string()),
                     None,
-                    b"this_should_be_the_filename.png".to_vec()
+                    b"this_should_be_the_filename.png".to_vec(),
                 ),
             ],
         };
 
         let server = MockServer::respond_to_logo_png_with(response_header);
 
-        let request: hyper::client::Request<hyper::Body> =
-            Request::new(
-                hyper::Method::Get,
-                "http://127.0.0.1:8738/assets/logo.png".parse().unwrap(),
-            );
+        let request: hyper::client::Request<hyper::Body> = Request::new(
+            hyper::Method::Get,
+            "http://127.0.0.1:8738/assets/logo.png".parse().unwrap(),
+        );
 
         let response = server.call(request).wait().unwrap();
         assert_eq!(
@@ -340,16 +345,15 @@ mod tests {
                 hyper::header::DispositionParam::Filename(
                     hyper::header::Charset::Ext("UTF-8".to_string()),
                     None,
-                    b"this_should_be_the_filename.png".to_vec()
+                    b"this_should_be_the_filename.png".to_vec(),
                 ),
             ],
         });
 
-        let request: hyper::client::Request<hyper::Body> =
-            Request::new(
-                hyper::Method::Get,
-                "http://127.0.0.1:8740/assets/logo.png".parse().unwrap(),
-            );
+        let request: hyper::client::Request<hyper::Body> = Request::new(
+            hyper::Method::Get,
+            "http://127.0.0.1:8740/assets/logo.png".parse().unwrap(),
+        );
 
         let response = server.call(request).wait().unwrap();
         assert_eq!(

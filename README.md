@@ -38,7 +38,7 @@ Example body:
 
 ```json
 {
-  "template_url": "http://example.com/template.tex",
+  "template_url": "http://example.com/template.tex.tera",
   "asset_urls": [
     "http://example.com/logo.png"
   ],
@@ -67,7 +67,7 @@ Example body:
 
 ```json
 {
-  "template_url": "http://example.com/template.tex",
+  "template_url": "http://example.com/template.tex.tera",
   "asset_urls": [
     "http://example.com/logo.png"
   ],
@@ -97,7 +97,7 @@ hello, {{world}}
 
 ## Local server
 
-Papers ships with the `papers-local` executable that you can use to develop your templates locally. Just put your assets in a directory, name your template `template.tex`, put variables in a `variables.json` and run the binary. You will get a rendered PDF that is produced by the same code that runs in the service.
+Papers ships with the `papers-local` executable that you can use to develop your templates locally. Just put your assets in a directory, name your template `template.tex.tera`, put variables in a `variables.json` and run the binary. You will get a rendered PDF that is produced by the same code that runs in the service.
 
 Take a look at the [simple example](examples/simple) in the examples directory for a quick introduction.
 

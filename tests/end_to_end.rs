@@ -112,14 +112,13 @@ fn test_end_to_end() {
             .map(move |body| (status, body))
     });
 
-    let expected_requests: Vec<Result<(&'static str, hyper::Method), ()>> =
-        vec![
-            ("/template", hyper::Method::Get),
-            ("/assets/logo.png", hyper::Method::Get),
-            ("/callback", hyper::Method::Post),
-        ].into_iter()
-            .map(Ok)
-            .collect();
+    let expected_requests: Vec<Result<(&'static str, hyper::Method), ()>> = vec![
+        ("/template", hyper::Method::Get),
+        ("/assets/logo.png", hyper::Method::Get),
+        ("/callback", hyper::Method::Post),
+    ].into_iter()
+        .map(Ok)
+        .collect();
 
     let expectations = receiver
         .take(expected_requests.len() as u64)

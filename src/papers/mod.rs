@@ -52,9 +52,7 @@ where
 
 impl<C> Papers<C>
 where
-    C: Service<Request = Request, Response = Response, Error = hyper::Error>
-        + FromHandle
-        + 'static,
+    C: Service<Request = Request, Response = Response, Error = hyper::Error> + FromHandle + 'static,
 {
     pub fn new(remote: Remote, config: &'static Config) -> Papers<C> {
         Papers {
@@ -110,7 +108,7 @@ where
                 error!(
                     logger,
                     "Assets URLs length exceeds the maximum ({}).\
-                    To change it set PAPERS_MAX_ASSETS_PER_DOCUMENT",
+                     To change it set PAPERS_MAX_ASSETS_PER_DOCUMENT",
                     max_assets_per_document,
                 );
                 return err(ErrorKind::UnprocessableEntity.into());
@@ -187,9 +185,7 @@ where
 
 impl<C> Service for Papers<C>
 where
-    C: Service<Request = Request, Response = Response, Error = hyper::Error>
-        + FromHandle
-        + 'static,
+    C: Service<Request = Request, Response = Response, Error = hyper::Error> + FromHandle + 'static,
 {
     type Request = Request;
     type Response = Response;
@@ -199,8 +195,7 @@ where
     fn call(&self, req: Self::Request) -> Self::Future {
         log_request(&self.config.logger, &req);
         let response = match (req.method(), req.path()) {
-            (&Get, "/healthz") |
-            (&Head, "/healthz") => self.health_check(req),
+            (&Get, "/healthz") | (&Head, "/healthz") => self.health_check(req),
             (&Post, "/preview") => self.preview(req),
             (&Post, "/submit") => self.submit(req),
             _ => Box::new(ok(Response::new().with_status(StatusCode::NotFound))),
@@ -215,13 +210,7 @@ where
 
 impl<C> NewService for Papers<C>
 where
-    C: Service<
-        Request = Request,
-        Response = Response,
-        Error = hyper::Error,
-    >
-        + FromHandle
-        + 'static,
+    C: Service<Request = Request, Response = Response, Error = hyper::Error> + FromHandle + 'static,
 {
     type Request = Request;
     type Response = Response;
