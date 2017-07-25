@@ -16,16 +16,16 @@ use papers::prelude::*;
 
 fn render(document_spec: DocumentSpec) {
     let DocumentSpec { variables, .. } = document_spec;
-    let template_string = ::std::fs::File::open("template.tex")
-        .expect("could not open template.tex")
+    let template_string = ::std::fs::File::open("template.tex.tera")
+        .expect("could not open template.tex.tera")
         .bytes()
         .collect::<Result<Vec<u8>, _>>()
         .unwrap();
     let template_string = String::from_utf8(template_string).unwrap();
     let rendered_template = tera::Tera::one_off(&template_string, &variables, false)
         .expect("failed to render the template");
-    let mut rendered_template_file = ::std::fs::File::create("rendered.tex")
-        .expect("could not create rendered.tex");
+    let mut rendered_template_file =
+        ::std::fs::File::create("rendered.tex").expect("could not create rendered.tex");
     rendered_template_file
         .write_all(rendered_template.as_bytes())
         .unwrap();

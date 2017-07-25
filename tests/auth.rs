@@ -58,7 +58,9 @@ fn test_submit_fails_when_auth_is_expected_but_missing() {
 fn test_submit_fails_if_auth_header_does_not_match_env_var() {
     let core = tokio_core::reactor::Core::new().unwrap();
     let request = Request::new(Post, "http://127.0.0.1:38021/submit".parse().unwrap())
-        .with_header(Authorization(Bearer { token: "other-string".to_string() }));
+        .with_header(Authorization(Bearer {
+            token: "other-string".to_string(),
+        }));
     let service: Papers<NoopService> = Papers::new(core.remote(), config_with_auth());
     let response = service.call(request).wait().unwrap();
     assert_eq!(response.status(), hyper::StatusCode::Forbidden);
@@ -68,7 +70,9 @@ fn test_submit_fails_if_auth_header_does_not_match_env_var() {
 fn test_submit_succeeds_if_auth_header_matches_env_var() {
     let core = tokio_core::reactor::Core::new().unwrap();
     let request = Request::new(Post, "http://127.0.0.1:38020/submit".parse().unwrap())
-        .with_header(Authorization(Bearer { token: "secret-string".to_string() }));
+        .with_header(Authorization(Bearer {
+            token: "secret-string".to_string(),
+        }));
     let service: Papers<NoopService> = Papers::new(core.remote(), config_with_auth());
     let response = service.call(request).wait().unwrap();
     assert_eq!(response.status(), hyper::StatusCode::UnprocessableEntity);
@@ -78,7 +82,9 @@ fn test_submit_succeeds_if_auth_header_matches_env_var() {
 fn test_preview_fails_if_auth_header_does_not_match_env_var() {
     let core = tokio_core::reactor::Core::new().unwrap();
     let request = Request::new(Post, "http://127.0.0.1:38022/preview".parse().unwrap())
-        .with_header(Authorization(Bearer { token: "other-string".to_string() }));
+        .with_header(Authorization(Bearer {
+            token: "other-string".to_string(),
+        }));
     let service: Papers<NoopService> = Papers::new(core.remote(), config_with_auth());
     let response = service.call(request).wait().unwrap();
     assert_eq!(response.status(), hyper::StatusCode::Forbidden);
@@ -88,7 +94,9 @@ fn test_preview_fails_if_auth_header_does_not_match_env_var() {
 fn test_preview_succeeds_if_auth_header_matches_env_var() {
     let core = tokio_core::reactor::Core::new().unwrap();
     let request = Request::new(Post, "http://127.0.0.1:38023/preview".parse().unwrap())
-        .with_header(Authorization(Bearer { token: "secret-string".to_string() }));
+        .with_header(Authorization(Bearer {
+            token: "secret-string".to_string(),
+        }));
     let service: Papers<NoopService> = Papers::new(core.remote(), config_with_auth());
     let response = service.call(request).wait().unwrap();
     assert_eq!(response.status(), hyper::StatusCode::UnprocessableEntity);

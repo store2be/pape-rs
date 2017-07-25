@@ -19,7 +19,7 @@ papers can be used as a concatenation tool.
         "https://example.com/linux_praxisbuch_shellprogrammierung",
         "https://example.com/batch_programmierung.pdf"
     ],
-    "template_url": "https://example.com/templates/merge.tex",
+    "template_url": "https://example.com/templates/merge.tex.tera",
     "callback_url": "https://example.com/callback&token=914f07aa876128e936",
     "variables": {
         "concat_pdfs": [

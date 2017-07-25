@@ -36,9 +36,7 @@ where
 
 impl<S> Renderer<S>
 where
-    S: Service<Request = Request, Response = Response, Error = hyper::Error>
-        + Clone
-        + 'static,
+    S: Service<Request = Request, Response = Response, Error = hyper::Error> + Clone + 'static,
 {
     fn get_template(
         &self,
