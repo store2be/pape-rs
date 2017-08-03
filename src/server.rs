@@ -2,7 +2,7 @@ use papers::Papers;
 
 use futures::future;
 use futures::Stream;
-use hyper::Client;
+use hyper::client::{HttpConnector, Client};
 use hyper::server::{Http, NewService};
 use hyper_tls::HttpsConnector;
 use tokio_core;
@@ -35,7 +35,7 @@ impl Server {
 
     pub fn start(self) {
         let mut core = tokio_core::reactor::Core::new().unwrap();
-        let papers_service: Papers<Client<HttpsConnector>> =
+        let papers_service: Papers<Client<HttpsConnector<HttpConnector>>> =
             Papers::new(core.remote(), self.config);
         let socket_addr = format!("0.0.0.0:{:?}", self.port).parse().unwrap();
         let handle = core.handle();

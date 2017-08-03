@@ -9,9 +9,7 @@ extern crate hyper_tls;
 #[macro_use]
 extern crate lazy_static;
 extern crate mktemp;
-#[macro_use]
-extern crate mime;
-extern crate multipart;
+extern crate mime_multipart as multipart;
 #[cfg(test)]
 #[macro_use]
 extern crate quickcheck;
