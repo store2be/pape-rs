@@ -35,7 +35,7 @@ impl Server {
 
     pub fn start(self) {
         let mut core = tokio_core::reactor::Core::new().unwrap();
-        let papers_service: Papers<Client<HttpsConnector>> =
+        let papers_service: Papers<Client<HttpsConnector<_>>> =
             Papers::new(core.remote(), self.config);
         let socket_addr = format!("0.0.0.0:{:?}", self.port).parse().unwrap();
         let handle = core.handle();

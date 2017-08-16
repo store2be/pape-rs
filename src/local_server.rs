@@ -2,7 +2,6 @@
 ///! template from the local directory, and receives the PDF from the callback endpoint.
 
 extern crate futures;
-extern crate multipart;
 extern crate papers;
 extern crate tokio_core;
 extern crate tera;

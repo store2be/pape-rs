@@ -1,21 +1,23 @@
-#![deny(warnings)]
+// #![deny(warnings)]
 
+extern crate dotenv;
 extern crate chrono;
 #[macro_use]
 extern crate error_chain;
 extern crate futures;
+extern crate futures_cpupool;
 extern crate hyper;
 extern crate hyper_tls;
 #[macro_use]
 extern crate lazy_static;
 extern crate mktemp;
-#[macro_use]
 extern crate mime;
-extern crate multipart;
 #[cfg(test)]
 #[macro_use]
 extern crate quickcheck;
 extern crate regex;
+extern crate rusoto_core as rusoto;
+extern crate rusoto_s3 as s3;
 extern crate serde;
 #[macro_use]
 extern crate serde_json;
@@ -24,6 +26,7 @@ extern crate serde_derive;
 #[macro_use]
 extern crate slog;
 extern crate slog_term;
+extern crate tar;
 extern crate tera;
 extern crate tokio_core;
 extern crate tokio_io;

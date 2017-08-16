@@ -1,16 +1,20 @@
+use dotenv::dotenv;
 use human_size::Bytes;
 use std::str::FromStr;
 use slog::{self, Logger, Filter, DrainExt, Level};
 use slog_term;
+use rusoto::credential::{AwsCredentials, ProvideAwsCredentials, CredentialsError};
+use chrono::{DateTime, Duration, Utc};
+use rusoto::region::Region;
 
-fn max_assets_per_document(logger: &slog::Logger) -> u8 {
+fn max_assets_per_document(logger: &Logger) -> u8 {
     let default = 20;
     match ::std::env::var("PAPERS_MAX_ASSETS_PER_DOCUMENT").map(|max| max.parse()) {
         Ok(Ok(max)) => max,
         Ok(Err(_)) => {
             warn!(
                 logger,
-                "Unable to parse PAPERS_MAX_ASSETS_PER_DOCUMENT environmental variable"
+                "Unable to parse PAPERS_MAX_ASSETS_PER_DOCUMENT environment variable"
             );
             default
         }
@@ -25,6 +29,14 @@ pub fn is_debug_active() -> bool {
     }
 }
 
+#[derive(Debug)]
+pub struct S3Config {
+    pub bucket: String,
+    pub access_key: String,
+    pub secret_key: String,
+    pub region: Region,
+}
+
 /// Please refer to the README for more details about configuration
 #[derive(Debug)]
 pub struct Config {
@@ -37,10 +49,14 @@ pub struct Config {
     pub max_asset_size: u32,
     /// The root logger for the application
     pub logger: Logger,
+    /// The S3 configuration
+    pub s3: S3Config,
 }
 
 impl Config {
     pub fn from_env() -> Config {
+        dotenv().ok();
+
         let max_asset_size = ::std::env::var("PAPERS_MAX_ASSET_SIZE")
             .map_err(|_| ())
             .and_then(|s| Bytes::from_str(&s))
@@ -63,11 +79,21 @@ impl Config {
 
         let max_assets_per_document = max_assets_per_document(&logger);
 
+        let aws_region_string = ::std::env::var("PAPERS_AWS_REGION").expect("The PAPERS_AWS_REGION environment variable was not provided");
+
+        let s3 = S3Config {
+            bucket: ::std::env::var("PAPERS_S3_BUCKET").expect("The PAPERS_BUCKET environment variable was not provided"),
+            access_key: ::std::env::var("PAPERS_AWS_ACCESS_KEY").expect("The PAPERS_AWS_ACCESS_KEY environment variable was not provided"),
+            secret_key: ::std::env::var("PAPERS_AWS_SECRET_KEY").expect("The PAPERS_AWS_SECRET_KEY environment variable was not provided"),
+            region: aws_region_string.parse().expect("The provided AWS region is not valid"),
+        };
+
         Config {
             auth,
-            max_assets_per_document,
-            max_asset_size,
             logger,
+            max_asset_size,
+            max_assets_per_document,
+            s3,
         }
     }
 
@@ -80,5 +106,16 @@ impl Config {
             max_assets_per_document,
             ..self
         }
+    }
+}
+
+impl<'a> ProvideAwsCredentials for &'a Config {
+    fn credentials(&self) -> Result<AwsCredentials, CredentialsError> {
+        Ok(AwsCredentials::new(
+            self.s3.access_key.clone(),
+            self.s3.secret_key.clone(),
+            None,
+            DateTime::<Utc>::checked_add_signed(Utc::now(), Duration::days(1)).unwrap()
+        ))
     }
 }

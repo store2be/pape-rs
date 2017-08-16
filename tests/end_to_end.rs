@@ -1,5 +1,4 @@
 extern crate futures;
-#[macro_use]
 extern crate mime;
 extern crate hyper;
 extern crate slog;
@@ -100,7 +99,7 @@ fn test_end_to_end() {
         hyper::Method::Post,
         "http://127.0.0.1:8019/submit".parse().unwrap(),
     ).with_body(document_spec.into())
-        .with_header(ContentType(mime!(Application / Json)));
+        .with_header(ContentType(mime::APPLICATION_JSON));
 
     let test = test_client.request(request).and_then(|res| {
         let status = res.status();
