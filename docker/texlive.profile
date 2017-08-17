@@ -14,7 +14,6 @@ collection-basic 1
 collection-binextra 1
 collection-fontsrecommended 1
 collection-fontutils 1
-collection-genericrecommended 1
 collection-langenglish 1
 collection-langeuropean 1
 collection-langfrench 1
@@ -24,9 +23,7 @@ collection-latex 1
 collection-latexextra 1
 collection-latexrecommended 1
 collection-pictures 1
-collection-plainextra 1
 collection-xetex 1
-in_place 0
 option_adjustrepo 1
 option_autobackup 1
 option_backupdir tlpkg/backups
@@ -35,7 +32,6 @@ option_doc 0
 option_file_assocs 1
 option_fmt 1
 option_letter 0
-option_menu_integration 1
 option_path 1
 option_post_code 1
 option_src 0

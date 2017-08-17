@@ -1,0 +1,7 @@
+- Update the changelog
+- Build binaries (don't forget to use the `--release` flag)
+- Build the Docker image
+- Upload the Docker image to Docker Hub
+- Git tag and push
+- Create a Github release
+- Upload binaries on the release
