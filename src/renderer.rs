@@ -441,6 +441,7 @@ fn get_presigned_url(config: &'static Config, key: String) -> Result<String, Err
     let request = s3::GetObjectRequest {
         bucket: config.s3.bucket.clone(),
         key,
+        response_expires: Some(format!("{}", config.s3.expiration_time)),
         ..Default::default()
     };
     client.presigned_url(&request).map_err(|err| {

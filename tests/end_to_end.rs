@@ -14,7 +14,6 @@ use hyper::header::ContentType;
 use futures::sync::mpsc;
 
 use papers::http::*;
-use papers::prelude::Summary;
 
 static TEMPLATE: &'static str = r"
 \documentclass{article}

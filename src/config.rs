@@ -36,6 +36,7 @@ pub struct S3Config {
     pub access_key: String,
     pub secret_key: String,
     pub region: Region,
+    pub expiration_time: u32,
 }
 
 /// Please refer to the README for more details about configuration
@@ -83,6 +84,11 @@ impl Config {
             "The PAPERS_AWS_REGION environment variable was not provided",
         );
 
+        let expiration_time: u32 = ::std::env::var("PAPERS_S3_EXPIRATION_TIME")
+            .unwrap_or_else(|_| "86400".to_string()) // one day
+            .parse()
+            .expect("PAPERS_S3_EXPIRATION_TIME should be a duration in seconds");
+
         let s3 = S3Config {
             bucket: ::std::env::var("PAPERS_S3_BUCKET")
                 .expect("The PAPERS_BUCKET environment variable was not provided"),
@@ -95,6 +101,7 @@ impl Config {
             region: aws_region_string
                 .parse()
                 .expect("The provided AWS region is not valid"),
+            expiration_time,
         };
 
         Config {
