@@ -48,6 +48,10 @@ impl server::Service for MockServer {
                 server::Response::new().with_body(TEMPLATE)
             }
             "/callback" => {
+                // TODO: It would be nice if we could write this to check that the service reported
+                // a successful PDF generation, but this is for later, since we consume the request
+                // later in the process.
+
                 // let bytes = req.get_body_bytes().wait().expect("could not read response");
                 // let summary =
                 // json::from_slice::<Summary>(&bytes).expect("response was not valid");

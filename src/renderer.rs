@@ -15,7 +15,6 @@ use tokio_process::CommandExt;
 use tera::Tera;
 use chrono::Utc;
 use rusoto;
-use rusoto::region;
 use serde_json;
 use s3;
 use s3::S3;
@@ -255,8 +254,16 @@ where
             let client = self.client.clone();
             let config = self.config.clone();
             let logger = logger.clone();
+            let s3_prefix = s3_prefix.clone();
             s3_upload.and_then(move |presigned_url| {
-                report_success(config, logger, client, callback_url.0, presigned_url)
+                report_success(
+                    config,
+                    logger,
+                    client,
+                    callback_url.0,
+                    s3_prefix,
+                    presigned_url,
+                )
             })
         };
 
@@ -264,8 +271,9 @@ where
         let handle_errors = {
             let logger = logger.clone();
             let client = self.client.clone();
+            let s3_prefix = s3_prefix.clone();
             callback_response.or_else(move |error| {
-                report_failure(logger, client, error, callback_url.0)
+                report_failure(logger, client, error, s3_prefix, callback_url.0)
             })
         };
 
@@ -286,6 +294,10 @@ where
     }
 }
 
+/// This returns a logger that also logs to the file pointed by the path parameter on top of the
+/// provided logger. The returned logger logs to both outputs.
+///
+/// The file logger has the debug level since this is what we want for debugging.
 fn make_file_logger(logger: Logger, path: &Path) -> Logger {
     let mut dest = path.to_path_buf();
     dest.push("logs.txt");
@@ -297,6 +309,8 @@ fn make_file_logger(logger: Logger, path: &Path) -> Logger {
     Logger::root(drain, o!())
 }
 
+/// Downloads all assets from the document spec in the workspace in parallel. It fails if any of
+/// those cannot be downloaded.
 fn download_assets<S>(
     config: &'static Config,
     logger: Logger,
@@ -338,18 +352,23 @@ where
     Box::new(future::join_all(futures))
 }
 
-
+/// This reports to the provided callback url with the presigned URL of the generated PDF.
+/// It returns the response from the callback url as a future.
 fn report_success<S>(
     config: &'static Config,
     logger: Logger,
     client: S,
     callback_url: Uri,
+    s3_prefix: String,
     presigned_url: String,
 ) -> Box<Future<Item = (), Error = Error>>
 where
     S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static + Clone,
 {
-    let outcome = Summary::File(presigned_url);
+    let outcome = Summary::File {
+        file: presigned_url,
+        s3_folder: s3_prefix,
+    };
 
     debug!(logger, "Summary sent to callback: {:?}", outcome);
 
@@ -391,17 +410,24 @@ where
     })
 }
 
+/// When an error occurs during the generation process, it is reported with this function. It calls
+/// the callback_url from the document spec, posting a `Summary` object with the error and the key
+/// where the debug output can be found.
 fn report_failure<S>(
     logger: Logger,
     client: S,
     error: Error,
+    s3_prefix: String,
     callback_url: Uri,
 ) -> Box<Future<Item = (), Error = Error>>
 where
     S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static,
 {
     error!(logger, "Reporting error: {}", error.display_chain());
-    let outcome = Summary::Error(format!("{}", error));
+    let outcome = Summary::Error {
+        error: format!("{}", error),
+        s3_folder: s3_prefix,
+    };
     debug!(logger, "Summary sent to callback: {:?}", outcome);
     let res = future::result(serde_json::to_vec(&outcome))
         .map_err(Error::from)
@@ -413,11 +439,12 @@ where
     Box::new(res)
 }
 
+/// Posts the file to the given key in S3 with the default S3 configuration.
 fn post_to_s3(config: &'static Config, path: &Path, key: String) -> Result<(), Error> {
     let client = s3::S3Client::new(
         rusoto::request::default_tls_client().expect("could not create TLS client"),
         config,
-        region::Region::EuCentral1,
+        config.s3.region,
     );
     let mut body: Vec<u8> = Vec::new();
     let mut file = File::open(path)?;
@@ -428,15 +455,21 @@ fn post_to_s3(config: &'static Config, path: &Path, key: String) -> Result<(), E
         key,
         ..Default::default()
     };
-    client.put_object(&request)?;
-    Ok(())
+
+    client
+        .put_object(&request)
+        .map(|_| ())
+        .map_err(|err| Error::with_chain(err, "Error during S3 upload"))
 }
 
+/// Gets a presigned url for the specified key in the bucket specified in the configuration.
+///
+/// This does not perform any request.
 fn get_presigned_url(config: &'static Config, key: String) -> Result<String, Error> {
     let client = s3::S3Client::new(
         rusoto::request::default_tls_client().expect("could not create TLS client"),
         config,
-        region::Region::EuCentral1,
+        config.s3.region,
     );
     let request = s3::GetObjectRequest {
         bucket: config.s3.bucket.clone(),
@@ -449,6 +482,8 @@ fn get_presigned_url(config: &'static Config, key: String) -> Result<String, Err
     })
 }
 
+/// This function is responsible for uploading a tar file with the contents from the workspace (the
+/// temporary directory where we generated the PDF) to S3 under the given key.
 fn upload_workspace(
     config: &'static Config,
     logger: Logger,
@@ -472,19 +507,7 @@ fn upload_workspace(
         tarrer.finish()?;
     }
 
-    let client = s3::S3Client::new(
-        rusoto::request::default_tls_client().expect("could not create TLS client"),
-        config,
-        region::Region::EuCentral1,
-    );
-    let request = s3::PutObjectRequest {
-        body: Some(tarred_workspace),
-        bucket: config.s3.bucket.clone(),
-        key,
-        ..Default::default()
-    };
-    client.put_object(&request)?;
-    Ok(())
+    post_to_s3(config, &workspace, key)
 }
 
 #[cfg(test)]
