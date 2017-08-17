@@ -25,6 +25,7 @@ use sloggers::types::Severity;
 use sloggers::file::FileLoggerBuilder;
 use std::default::Default;
 use std::fs::File;
+use error_chain::ChainedError;
 
 use http::*;
 use papers::{DocumentSpec, PapersUri, Summary};
@@ -191,6 +192,9 @@ where
             let logger = logger.clone();
             files_written.and_then(move |_| {
                 debug!(logger, "Spawning latex");
+                debug!(logger, "template_path {:?}", template_path);
+                debug!(logger, "temp_dir_path {:?}", temp_dir_path);
+                debug!(logger, "Rendered template exists: {:?}", template_path.exists());
                 Command::new("xelatex")
                     .current_dir(&temp_dir_path)
                     .arg("-interaction=nonstopmode")
@@ -367,7 +371,7 @@ where S: Service<Request = Request, Response = Response, Error = hyper::Error> +
 fn report_failure<S>(logger: Logger, client: S, error: Error, callback_url: Uri) -> Box<Future<Item=(), Error=Error>>
     where S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static
 {
-    error!(logger, "Reporting error: {}\n{:?}", error, error.backtrace());
+    error!(logger, "Reporting error: {}", error.display_chain());
     let outcome = Summary::Error(format!("{}", error));
     debug!(logger, "Summary sent to callback: {:?}", outcome);
     let res = future::result(serde_json::to_vec(&outcome))
@@ -404,7 +408,7 @@ fn get_presigned_url(config: &'static Config, key: String) -> Result<String, Err
         key,
         ..Default::default()
     };
-    client.presigned_url(&request).map_err(From::from)
+    client.presigned_url(&request).map_err(|err| Error::with_chain(err, "Could not generate presigned url"))
 }
 
 fn upload_workspace(config: &'static Config, logger: Logger, workspace: PathBuf, key: String) -> Result<(), Error> {

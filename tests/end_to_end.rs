@@ -14,6 +14,7 @@ use hyper::header::ContentType;
 use futures::sync::mpsc;
 
 use papers::http::*;
+use papers::prelude::Summary;
 
 static TEMPLATE: &'static str = r"
 \documentclass{article}
@@ -47,7 +48,14 @@ impl server::Service for MockServer {
                 std::thread::sleep(std::time::Duration::from_millis(20));
                 server::Response::new().with_body(TEMPLATE)
             }
-            "/callback" => server::Response::new(),
+            "/callback" => {
+                // let bytes = req.get_body_bytes().wait().expect("could not read response");
+                // let summary = json::from_slice::<Summary>(&bytes).expect("response was not valid");
+                // if let Summary::Error(err) = summary {
+                //     panic!("Error reported to callback endpoint: {}", err);
+                // }
+                server::Response::new()
+            },
             _ => server::Response::new().with_status(hyper::StatusCode::NotFound),
 
         };
@@ -74,14 +82,14 @@ fn test_end_to_end() {
             .bind(&"127.0.0.1:8733".parse().unwrap(), move || {
                 Ok(MockServer::new(sender.clone()))
             })
-            .unwrap()
+            .expect("could not bind")
             .run()
-            .unwrap();
+            .expect("could not run");
     });
 
-    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::thread::sleep(std::time::Duration::from_millis(400));
 
-    let mut core = tokio_core::reactor::Core::new().unwrap();
+    let mut core = tokio_core::reactor::Core::new().expect("could not create reactor");
 
     let handle = core.handle();
     let test_client = Client::new(&handle.clone());
@@ -129,10 +137,10 @@ fn test_end_to_end() {
         });
 
     // Request + expectations
-    let tests = test.map_err(|_| ())
+    let tests = test.map_err(|err| println!("Test error: {}", err))
         .and_then(|res| expectations.map(|_| res));
 
-    let (status, body) = core.run(tests).unwrap();
+    let (status, body) = core.run(tests).expect("tests failed");
     assert_eq!(status, hyper::StatusCode::Ok);
-    assert_eq!(::std::str::from_utf8(&body).unwrap(), "");
+    assert_eq!(::std::str::from_utf8(&body).expect("body is not valid utf8"), "");
 }
