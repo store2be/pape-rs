@@ -1,21 +1,24 @@
-#![deny(warnings)]
+// Temporarily disabled because of warnings in error_chain
+// #![deny(warnings)]
 
+extern crate dotenv;
 extern crate chrono;
 #[macro_use]
 extern crate error_chain;
 extern crate futures;
+extern crate futures_cpupool;
 extern crate hyper;
 extern crate hyper_tls;
 #[macro_use]
 extern crate lazy_static;
 extern crate mktemp;
-#[macro_use]
 extern crate mime;
-extern crate multipart;
 #[cfg(test)]
 #[macro_use]
 extern crate quickcheck;
 extern crate regex;
+extern crate rusoto_core as rusoto;
+extern crate rusoto_s3 as s3;
 extern crate serde;
 #[macro_use]
 extern crate serde_json;
@@ -23,7 +26,8 @@ extern crate serde_json;
 extern crate serde_derive;
 #[macro_use]
 extern crate slog;
-extern crate slog_term;
+extern crate sloggers;
+extern crate tar;
 extern crate tera;
 extern crate tokio_core;
 extern crate tokio_io;
@@ -41,7 +45,7 @@ pub mod test_utils;
 pub mod prelude {
     pub use config::Config;
     pub use error::{Error, ErrorKind};
-    pub use papers::{FromHandle, DocumentSpec, Papers, PapersUri};
+    pub use papers::{DocumentSpec, FromHandle, Papers, PapersUri, Summary};
     pub use renderer::Renderer;
     pub use server::Server;
 }

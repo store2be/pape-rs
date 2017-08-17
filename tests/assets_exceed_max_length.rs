@@ -1,7 +1,6 @@
 extern crate futures;
 #[macro_use]
 extern crate lazy_static;
-#[macro_use]
 extern crate mime;
 extern crate hyper;
 extern crate slog;
@@ -9,8 +8,7 @@ extern crate tokio_core;
 extern crate papers;
 extern crate serde_json as json;
 
-use futures::future;
-use futures::{Future, Stream};
+use futures::Future;
 use hyper::client::{Client, Request};
 use hyper::header::ContentType;
 
@@ -31,9 +29,9 @@ fn test_assets_exceed_max_length() {
             .start();
     });
 
-    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::thread::sleep(std::time::Duration::from_millis(500));
 
-    let mut core = tokio_core::reactor::Core::new().unwrap();
+    let mut core = tokio_core::reactor::Core::new().expect("could not start event loop");
 
     let handle = core.handle();
     let test_client = Client::new(&handle.clone());
@@ -49,23 +47,17 @@ fn test_assets_exceed_max_length() {
 
     let request: Request<hyper::Body> = Request::new(
         hyper::Method::Post,
-        "http://127.0.0.1:8049/submit".parse().unwrap(),
+        "http://127.0.0.1:8049/submit".parse().expect("Wrong uri"),
     ).with_body(document_spec.into())
-        .with_header(ContentType(mime!(Application / Json)));
+        .with_header(ContentType(mime::APPLICATION_JSON));
 
-    let test = test_client.request(request).and_then(|res| {
-        let status = res.status();
-        res.body()
-            .fold(Vec::new(), |mut acc, chunk| {
-                acc.extend_from_slice(&chunk);
-                future::ok::<_, hyper::Error>(acc)
-            })
-            .map(move |body| (status, body))
-    });
+    let test = test_client
+        .request(request)
+        .and_then(|res| Ok(res.status()));
 
     // Request
     let tests = test.map_err(|_| ());
 
-    let (status, _) = core.run(tests).unwrap();
+    let status = core.run(tests).expect("test failed");
     assert_eq!(status, hyper::StatusCode::UnprocessableEntity);
 }

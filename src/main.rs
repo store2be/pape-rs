@@ -1,4 +1,5 @@
-#![deny(warnings)]
+// Temporarily disabled because of warnings in error_chain
+// #![deny(warnings)]
 
 extern crate papers;
 

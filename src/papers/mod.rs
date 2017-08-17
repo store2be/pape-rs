@@ -1,21 +1,24 @@
 mod document_spec;
+mod summary;
 
-use futures::future::{Future, ok, err, result};
+use mime;
+use futures::future::{err, ok, result, Future};
 use futures::sync::oneshot;
 use hyper;
-use hyper::{Get, Post, Head, StatusCode};
-use hyper::client::Client;
-use hyper::server::{Request, Response, Service, NewService};
+use hyper::{Get, Head, Post, StatusCode};
+use hyper::client::{Client, HttpConnector};
+use hyper::server::{NewService, Request, Response, Service};
 use hyper::header::{Authorization, Bearer};
 use hyper_tls::HttpsConnector;
 use serde_json;
 use slog;
 use std::marker::PhantomData;
-use tokio_core::reactor::{Remote, Handle};
+use tokio_core::reactor::{Handle, Remote};
 
 use http::*;
 use error::{Error, ErrorKind};
 pub use self::document_spec::{DocumentSpec, PapersUri};
+pub use self::summary::Summary;
 use renderer::Renderer;
 use config::Config;
 
@@ -23,7 +26,7 @@ pub trait FromHandle: Clone {
     fn build(handle: &Handle) -> Self;
 }
 
-impl FromHandle for Client<HttpsConnector> {
+impl FromHandle for Client<HttpsConnector<HttpConnector>> {
     fn build(handle: &Handle) -> Self {
         Client::configure()
             .connector(https_connector(handle))
@@ -72,11 +75,9 @@ where
                     return Err(Error::from_kind(ErrorKind::Forbidden));
                 }
             }
-            None => {
-                if self.config.auth != "" {
-                    return Err(Error::from_kind(ErrorKind::Forbidden));
-                }
-            }
+            None => if self.config.auth != "" {
+                return Err(Error::from_kind(ErrorKind::Forbidden));
+            },
         }
         Ok(())
     }
@@ -88,7 +89,7 @@ where
             return Box::new(err(error));
         }
 
-        if !req.has_content_type(mime!(Application / Json)) {
+        if !req.has_content_type(mime::APPLICATION_JSON) {
             return Box::new(err(ErrorKind::UnprocessableEntity.into()));
         }
 
@@ -138,7 +139,7 @@ where
             return Box::new(err(error));
         }
 
-        if !req.has_content_type(mime!(Application / Json)) {
+        if !req.has_content_type(mime::APPLICATION_JSON) {
             return Box::new(err(ErrorKind::UnprocessableEntity.into()));
         }
 

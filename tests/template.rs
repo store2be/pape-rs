@@ -1,7 +1,6 @@
 extern crate futures;
 #[macro_use]
 extern crate lazy_static;
-#[macro_use]
 extern crate mime;
 extern crate hyper;
 extern crate tokio_core;
@@ -68,7 +67,7 @@ fn test_simple_template_preview() {
         hyper::Method::Post,
         "http://127.0.0.1:8019/preview".parse().unwrap(),
     ).with_body(document_spec.into())
-        .with_header(ContentType(mime!(Application / Json)));
+        .with_header(ContentType(mime::APPLICATION_JSON));
     let mut core = tokio_core::reactor::Core::new().unwrap();
 
     lazy_static! {

@@ -1,19 +1,33 @@
+use tar;
 use futures::sync::oneshot;
 use futures::future;
 use futures::Future;
+use futures_cpupool::CpuPool;
 use hyper;
-use hyper::{Response, Request, Uri};
+use hyper::{Request, Response, Uri};
 use hyper::server::Service;
 use mktemp::Temp;
 use std::io::prelude::*;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use tokio_core::reactor::Handle;
 use tokio_process::CommandExt;
 use tera::Tera;
+use chrono::Utc;
+use rusoto;
+use serde_json;
+use s3;
+use s3::S3;
+use slog::{Drain, Duplicate, Logger};
+use sloggers::Build;
+use sloggers::types::Severity;
+use sloggers::file::FileLoggerBuilder;
+use std::default::Default;
+use std::fs::File;
+use error_chain::ChainedError;
 
 use http::*;
-use papers::DocumentSpec;
+use papers::{DocumentSpec, PapersUri, Summary};
 use error::{Error, ErrorKind};
 use config::Config;
 
@@ -22,6 +36,10 @@ fn extract_filename_from_uri(uri: &Uri) -> Option<String> {
         Some(name) if !name.is_empty() => Some(name.to_string()),
         _ => None,
     }
+}
+
+fn s3_dir_name() -> String {
+    format!("{}", Utc::now())
 }
 
 #[derive(Debug)]
@@ -84,22 +102,24 @@ where
     // the last returned future that needs the directory finishes.
     pub fn render(&self, document_spec: DocumentSpec) -> Box<Future<Item = (), Error = ()>> {
         let dir = Temp::new_dir();
+        let pool = CpuPool::new(3);
+        let s3_prefix = s3_dir_name();
 
         if let Err(err) = dir {
-            error!(self.config.logger, err);
+            error!(self.config.logger, "{}", err);
             return Box::new(future::err(()));
         }
 
         let dir = dir.unwrap();
 
         let temp_dir_path = dir.to_path_buf();
+        let logger = make_file_logger(self.config.logger.clone(), &temp_dir_path);
+
         let mut template_path = temp_dir_path.clone();
         template_path.push(Path::new(
             &document_spec.output_filename.replace("pdf", "tex"),
         ));
         let max_asset_size = self.config.max_asset_size;
-        let handle = self.handle.clone();
-        let logger = self.config.logger.clone();
 
         debug!(
             logger,
@@ -140,7 +160,7 @@ where
             let template_path = template_path.clone();
             rendered_template.and_then(move |latex_string| {
                 debug!(logger, "Writing template to {:?}", &template_path);
-                let mut file = ::std::fs::File::create(&template_path).unwrap();
+                let mut file = ::std::fs::File::create(&template_path)?;
                 file.write_all(latex_string.as_bytes())
                     .expect("could not write latex file");
                 debug!(
@@ -154,48 +174,30 @@ where
 
         // Download the assets and save them in the temporary directory
         let files_written = {
+            let config = self.config.clone();
             let logger = logger.clone();
             let temp_dir_path = temp_dir_path.clone();
-            let max_asset_size = max_asset_size;
             let client = self.client.clone();
             written_template_path.and_then(move |_| {
-                debug!(logger, "Downloading assets {:?}", assets_urls);
-                let futures = assets_urls.into_iter().map(move |uri| {
-                    let logger = logger.clone();
-                    let mut path = temp_dir_path.clone();
-                    let client = client.clone();
-
-                    let response = client.get_follow_redirect(&uri.0);
-
-                    let body = response.and_then(move |res| {
-                        let filename = res.filename();
-                        res.get_body_bytes_with_limit(max_asset_size)
-                            .map(|bytes| (bytes, filename))
-                    });
-                    body.and_then(move |(bytes, filename)| {
-                        let filename = filename.or_else(|| extract_filename_from_uri(&uri.0));
-                        match filename {
-                            Some(filename) => {
-                                path.push(filename);
-                                debug!(logger, "Writing asset {:?} as {:?}", uri, path);
-                                ::std::fs::File::create(&path)
-                                    .and_then(|mut file| file.write_all(&bytes))
-                                    .map_err(Error::from)
-                            }
-                            _ => Ok(()),
-                        }
-                    })
-                });
-                future::join_all(futures)
+                download_assets(config, logger, temp_dir_path, client, assets_urls)
             })
         };
 
         // Then run latex
         let latex_out = {
-            let handle = handle.clone();
+            let handle = self.handle.clone();
             let template_path = template_path.clone();
             let temp_dir_path = temp_dir_path.clone();
+            let logger = logger.clone();
             files_written.and_then(move |_| {
+                debug!(logger, "Spawning latex");
+                debug!(logger, "template_path {:?}", template_path);
+                debug!(logger, "temp_dir_path {:?}", temp_dir_path);
+                debug!(
+                    logger,
+                    "Rendered template exists: {:?}",
+                    template_path.exists()
+                );
                 Command::new("xelatex")
                     .current_dir(&temp_dir_path)
                     .arg("-interaction=nonstopmode")
@@ -203,7 +205,7 @@ where
                     .arg("-shell-restricted")
                     .arg(template_path)
                     .output_async(&handle)
-                    .map_err(Error::from)
+                    .map_err(|err| Error::with_chain(err, "Error generating PDF"))
             })
         };
 
@@ -228,51 +230,40 @@ where
                 })
         };
 
-        // Then post a multipart request from the generated PDF
-        let callback_response = {
+        let s3_upload = {
+            let config = self.config.clone();
             let logger = logger.clone();
-            let callback_url = callback_url.clone();
-            let client = self.client.clone();
-            output_path
-                .and_then(move |pdf_path| {
-                    debug!(logger, "Reading the pdf from {:?}", pdf_path);
-                    debug!(logger, "Sending generated PDF to {}", callback_url.0);
-                    multipart_request_with_file(
-                        Request::new(hyper::Method::Post, callback_url.0),
-                        pdf_path,
-                    )
+            let pool = pool.clone();
+            let key = format!("{}/{}", &s3_prefix, "rendered.pdf");
+            output_path.and_then(move |path| {
+                pool.spawn_fn(move || {
+                    debug!(
+                        logger,
+                        "Uploading the rendered pdf as {:?} / {:?}",
+                        config.s3.bucket,
+                        key
+                    );
+                    post_to_s3(config, &path, key.clone())?;
+                    get_presigned_url(config, key)
                 })
-                .and_then(move |req| {
-                    // Avoid dir being dropped early
-                    let _dir = dir;
-
-                    client.call(req).map_err(Error::from)
-                })
-        };
-
-        let response_bytes = {
-            let logger = logger.clone();
-            let max_asset_size = max_asset_size;
-            callback_response.and_then(move |response| {
-                info!(
-                    logger,
-                    "Callback response: {}",
-                    response.status().canonical_reason().unwrap_or("unknown")
-                );
-
-                response.get_body_bytes_with_limit(max_asset_size)
             })
         };
 
-        let res = {
+        let callback_response = {
+            let callback_url = callback_url.clone();
+            let client = self.client.clone();
+            let config = self.config.clone();
             let logger = logger.clone();
-            response_bytes.and_then(move |bytes| {
-                debug!(
+            let s3_prefix = s3_prefix.clone();
+            s3_upload.and_then(move |presigned_url| {
+                report_success(
+                    config,
                     logger,
-                    "Callback response body: {:?}",
-                    ::std::str::from_utf8(&bytes).unwrap_or("<binary content>")
-                );
-                future::ok(())
+                    client,
+                    callback_url.0,
+                    s3_prefix,
+                    presigned_url,
+                )
             })
         };
 
@@ -280,17 +271,243 @@ where
         let handle_errors = {
             let logger = logger.clone();
             let client = self.client.clone();
-            res.or_else(move |error| {
-                error!(logger, format!("{}", error));
-                let req = Request::new(hyper::Method::Post, callback_url.0);
-                client
-                    .call(multipart_request_with_error(req, &error).unwrap())
-                    .map(|_| ())
+            let s3_prefix = s3_prefix.clone();
+            callback_response.or_else(move |error| {
+                report_failure(logger, client, error, s3_prefix, callback_url.0)
             })
         };
 
-        Box::new(handle_errors.map_err(|_| ()))
+        let tarred_workspace_uploaded = {
+            let config = self.config.clone();
+            let key = format!("{}/{}", &s3_prefix, "workspace.tar");
+            let temp_dir_path = temp_dir_path.clone();
+            let logger = logger.clone();
+            handle_errors
+                .then(move |_| {
+                    pool.spawn_fn(move || upload_workspace(config, logger, temp_dir_path, key))
+                })
+                .map_err(move |_| { let _hold = dir; })
+        };
+
+
+        Box::new(tarred_workspace_uploaded)
     }
+}
+
+/// This returns a logger that also logs to the file pointed by the path parameter on top of the
+/// provided logger. The returned logger logs to both outputs.
+///
+/// The file logger has the debug level since this is what we want for debugging.
+fn make_file_logger(logger: Logger, path: &Path) -> Logger {
+    let mut dest = path.to_path_buf();
+    dest.push("logs.txt");
+    let file_drain = FileLoggerBuilder::new(dest)
+        .level(Severity::Debug)
+        .build()
+        .expect("Could not create a file logger");
+    let drain = Duplicate::new(logger.clone(), file_drain).fuse();
+    Logger::root(drain, o!())
+}
+
+/// Downloads all assets from the document spec in the workspace in parallel. It fails if any of
+/// those cannot be downloaded.
+fn download_assets<S>(
+    config: &'static Config,
+    logger: Logger,
+    temp_dir_path: PathBuf,
+    client: S,
+    assets_urls: Vec<PapersUri>,
+) -> Box<Future<Item = Vec<()>, Error = Error>>
+where
+    S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static + Clone,
+{
+    let max_asset_size = config.max_asset_size.clone();
+    debug!(logger, "Downloading assets {:?}", assets_urls);
+    let futures = assets_urls.into_iter().map(move |uri| {
+        let logger = logger.clone();
+        let mut path = temp_dir_path.to_path_buf();
+        let client = client.clone();
+
+        let response = client.get_follow_redirect(&uri.0);
+
+        let body = response.and_then(move |res| {
+            let filename = res.filename();
+            res.get_body_bytes_with_limit(max_asset_size)
+                .map(|bytes| (bytes, filename))
+        });
+        body.and_then(move |(bytes, filename)| {
+            let filename = filename.or_else(|| extract_filename_from_uri(&uri.0));
+            match filename {
+                Some(filename) => {
+                    path.push(filename);
+                    debug!(logger, "Writing asset {:?} as {:?}", uri, path);
+                    ::std::fs::File::create(&path)
+                        .and_then(|mut file| file.write_all(&bytes))
+                        .map_err(|e| Error::with_chain(e, "Error writing asset"))
+                }
+                _ => Ok(()),
+            }
+        })
+    });
+    Box::new(future::join_all(futures))
+}
+
+/// This reports to the provided callback url with the presigned URL of the generated PDF and the
+/// location of the debugging output. It returns the response from the callback url as a future.
+fn report_success<S>(
+    config: &'static Config,
+    logger: Logger,
+    client: S,
+    callback_url: Uri,
+    s3_prefix: String,
+    presigned_url: String,
+) -> Box<Future<Item = (), Error = Error>>
+where
+    S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static + Clone,
+{
+    let outcome = Summary::File {
+        file: presigned_url,
+        s3_folder: s3_prefix,
+    };
+
+    debug!(logger, "Summary sent to callback: {:?}", outcome);
+
+    let callback_response = future::result(serde_json::to_vec(&outcome))
+        .map_err(|err| {
+            Error::with_chain(err, "Error encoding the rendering outcome")
+        })
+        .and_then(move |body| {
+            let req = Request::new(hyper::Method::Post, callback_url).with_body(body.into());
+            client.call(req).map_err(|err| {
+                Error::with_chain(err, "Error posting to callback URL")
+            })
+        });
+
+    let response_bytes = {
+        let logger = logger.clone();
+        let max_asset_size = config.max_asset_size.clone();
+        callback_response.and_then(move |response| {
+            info!(
+                logger,
+                "Callback response: {}",
+                response.status().canonical_reason().unwrap_or("unknown")
+            );
+
+            response.get_body_bytes_with_limit(max_asset_size)
+        })
+    };
+
+    Box::new({
+        let logger = logger.clone();
+        response_bytes.and_then(move |bytes| {
+            debug!(
+                logger,
+                "Callback response body: {:?}",
+                ::std::str::from_utf8(&bytes).unwrap_or("<binary content>")
+            );
+            future::ok(())
+        })
+    })
+}
+
+/// When an error occurs during the generation process, it is reported with this function. It calls
+/// the callback_url from the document spec, posting a `Summary` object with the error and the key
+/// where the debug output can be found.
+fn report_failure<S>(
+    logger: Logger,
+    client: S,
+    error: Error,
+    s3_prefix: String,
+    callback_url: Uri,
+) -> Box<Future<Item = (), Error = Error>>
+where
+    S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static,
+{
+    error!(logger, "Reporting error: {}", error.display_chain());
+    let outcome = Summary::Error {
+        error: format!("{}", error),
+        s3_folder: s3_prefix,
+    };
+    debug!(logger, "Summary sent to callback: {:?}", outcome);
+    let res = future::result(serde_json::to_vec(&outcome))
+        .map_err(Error::from)
+        .and_then(move |body| {
+            let req = Request::new(hyper::Method::Post, callback_url).with_body(body.into());
+            client.call(req).map_err(Error::from)
+        })
+        .map(|_| ());
+    Box::new(res)
+}
+
+/// Posts the file to the given key in S3 with the default S3 configuration.
+fn post_to_s3(config: &'static Config, path: &Path, key: String) -> Result<(), Error> {
+    let client = s3::S3Client::new(
+        rusoto::request::default_tls_client().expect("could not create TLS client"),
+        config,
+        config.s3.region,
+    );
+    let mut body: Vec<u8> = Vec::new();
+    let mut file = File::open(path)?;
+    file.read_to_end(&mut body)?;
+    let request = s3::PutObjectRequest {
+        body: Some(body),
+        bucket: config.s3.bucket.clone(),
+        key,
+        ..Default::default()
+    };
+
+    client
+        .put_object(&request)
+        .map(|_| ())
+        .map_err(|err| Error::with_chain(err, "Error during S3 upload"))
+}
+
+/// Gets a presigned url for the specified key in the bucket specified in the configuration.
+///
+/// This does not perform any request.
+fn get_presigned_url(config: &'static Config, key: String) -> Result<String, Error> {
+    let client = s3::S3Client::new(
+        rusoto::request::default_tls_client().expect("could not create TLS client"),
+        config,
+        config.s3.region,
+    );
+    let request = s3::GetObjectRequest {
+        bucket: config.s3.bucket.clone(),
+        key,
+        response_expires: Some(format!("{}", config.s3.expiration_time)),
+        ..Default::default()
+    };
+    client.presigned_url(&request).map_err(|err| {
+        Error::with_chain(err, "Could not generate presigned url")
+    })
+}
+
+/// This function is responsible for uploading a tar file with the contents from the workspace (the
+/// temporary directory where we generated the PDF) to S3 under the given key.
+fn upload_workspace(
+    config: &'static Config,
+    logger: Logger,
+    workspace: PathBuf,
+    key: String,
+) -> Result<(), Error> {
+    debug!(logger, "Tarring {:?}", workspace);
+    let mut tarred_workspace: Vec<u8> = Vec::new();
+    {
+        let dir_name: PathBuf = workspace
+            .clone()
+            .components()
+            .last()
+            .unwrap()
+            .as_os_str()
+            .into();
+        debug!(logger, "tar {:?} as {:?}", &workspace, &dir_name);
+        let mut tarrer = tar::Builder::new(&mut tarred_workspace);
+        tarrer.append_dir_all(&dir_name, &workspace)?;
+        debug!(logger, "Tar was successful");
+        tarrer.finish()?;
+    }
+
+    post_to_s3(config, &workspace, key)
 }
 
 #[cfg(test)]

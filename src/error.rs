@@ -2,6 +2,8 @@ use hyper;
 use hyper::server::Response;
 use hyper::StatusCode;
 use tera;
+use s3;
+use serde_json;
 
 error_chain! {
     types {
@@ -16,6 +18,9 @@ error_chain! {
         Hyper(hyper::Error);
         Io(::std::io::Error);
         Tera(tera::Error);
+        S3Get(s3::GetObjectError);
+        S3Put(s3::PutObjectError);
+        Json(serde_json::Error);
         UriError(hyper::error::UriError);
         FromUtf8Error(::std::string::FromUtf8Error);
     }
