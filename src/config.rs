@@ -1,8 +1,9 @@
 use dotenv::dotenv;
 use human_size::Bytes;
 use std::str::FromStr;
-use slog::{self, Logger, Filter, DrainExt, Level};
-use slog_term;
+use slog::{self, Logger};
+use sloggers::{self, Build};
+use sloggers::types::Severity;
 use rusoto::credential::{AwsCredentials, ProvideAwsCredentials, CredentialsError};
 use chrono::{DateTime, Duration, Utc};
 use rusoto::region::Region;
@@ -66,15 +67,14 @@ impl Config {
         let auth = ::std::env::var("PAPERS_BEARER").unwrap_or_else(|_| "".to_string());
 
         let minimum_level = if is_debug_active() {
-            Level::Debug
+            Severity::Debug
         } else {
-            Level::Info
+            Severity::Info
         };
-        let drain = slog_term::streamer().full().build().fuse();
-        let drain = Filter::new(
-            drain,
-            move |record| record.level().is_at_least(minimum_level),
-        );
+        let drain = sloggers::terminal::TerminalLoggerBuilder::new()
+            .level(minimum_level)
+            .build()
+            .expect("Could not build a terminal logger");
         let logger = slog::Logger::root(drain, o!());
 
         let max_assets_per_document = max_assets_per_document(&logger);

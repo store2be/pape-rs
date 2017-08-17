@@ -1,5 +1,4 @@
 use tar;
-use slog::Logger;
 use futures::sync::oneshot;
 use futures::future;
 use futures::Future;
@@ -20,6 +19,10 @@ use rusoto::region;
 use serde_json;
 use s3;
 use s3::S3;
+use slog::{Logger, Duplicate, Drain};
+use sloggers::Build;
+use sloggers::types::Severity;
+use sloggers::file::FileLoggerBuilder;
 use std::default::Default;
 use std::fs::File;
 
@@ -103,20 +106,20 @@ where
         let s3_prefix = s3_dir_name();
 
         if let Err(err) = dir {
-            error!(self.config.logger, err);
+            error!(self.config.logger, "{}", err);
             return Box::new(future::err(()));
         }
 
         let dir = dir.unwrap();
 
         let temp_dir_path = dir.to_path_buf();
+        let logger = make_file_logger(self.config.logger.clone(), &temp_dir_path);
+
         let mut template_path = temp_dir_path.clone();
         template_path.push(Path::new(
             &document_spec.output_filename.replace("pdf", "tex"),
         ));
         let max_asset_size = self.config.max_asset_size;
-        let handle = self.handle.clone();
-        let logger = self.config.logger.clone();
 
         debug!(
             logger,
@@ -157,7 +160,7 @@ where
             let template_path = template_path.clone();
             rendered_template.and_then(move |latex_string| {
                 debug!(logger, "Writing template to {:?}", &template_path);
-                let mut file = ::std::fs::File::create(&template_path).unwrap();
+                let mut file = ::std::fs::File::create(&template_path)?;
                 file.write_all(latex_string.as_bytes())
                     .expect("could not write latex file");
                 debug!(
@@ -182,10 +185,12 @@ where
 
         // Then run latex
         let latex_out = {
-            let handle = handle.clone();
+            let handle = self.handle.clone();
             let template_path = template_path.clone();
             let temp_dir_path = temp_dir_path.clone();
+            let logger = logger.clone();
             files_written.and_then(move |_| {
+                debug!(logger, "Spawning latex");
                 Command::new("xelatex")
                     .current_dir(&temp_dir_path)
                     .arg("-interaction=nonstopmode")
@@ -193,7 +198,7 @@ where
                     .arg("-shell-restricted")
                     .arg(template_path)
                     .output_async(&handle)
-                    .map_err(Error::from)
+                    .map_err(|err| Error::with_chain(err, "Error generating PDF"))
             })
         };
 
@@ -243,31 +248,42 @@ where
             })
         };
 
+        // Report errors to the callback url
+        let handle_errors = {
+            let logger = logger.clone();
+            let client = self.client.clone();
+            callback_response
+                .or_else(move |error| report_failure(logger, client, error, callback_url.0))
+        };
+
         let tarred_workspace_uploaded = {
             let config = self.config.clone();
             let key = format!("{}/{}", &s3_prefix, "workspace.tar");
             let temp_dir_path = temp_dir_path.clone();
             let logger = logger.clone();
-            callback_response.and_then(move |_| {
+            handle_errors.then(move |_| {
                 pool.spawn_fn(move || {
                     upload_workspace(config, logger, temp_dir_path, key)
                 })
+            }).map_err(move |_| {
+                let _hold = dir;
             })
         };
 
-        // Report errors to the callback url
-        let handle_errors = {
-            let logger = logger.clone();
-            let client = self.client.clone();
-            tarred_workspace_uploaded
-                .or_else(move |error| report_failure(logger, client, error, callback_url.0))
-                .map_err(move |_| {
-                    let _hold = dir;
-                })
-        };
 
-        Box::new(handle_errors)
+        Box::new(tarred_workspace_uploaded)
     }
+}
+
+fn make_file_logger(logger: Logger, path: &Path) -> Logger {
+    let mut dest = path.to_path_buf();
+    dest.push("logs.txt");
+    let file_drain = FileLoggerBuilder::new(dest)
+        .level(Severity::Debug)
+        .build()
+        .expect("Could not create a file logger");
+    let drain = Duplicate::new(logger.clone(), file_drain).fuse();
+    Logger::root(drain, o!())
 }
 
 fn download_assets<S>(config: &'static Config, logger: Logger, temp_dir_path: PathBuf, client: S, assets_urls: Vec<PapersUri>) -> Box<Future<Item=Vec<()>, Error=Error>>
@@ -295,7 +311,7 @@ where S: Service<Request = Request, Response = Response, Error = hyper::Error> +
                     debug!(logger, "Writing asset {:?} as {:?}", uri, path);
                     ::std::fs::File::create(&path)
                         .and_then(|mut file| file.write_all(&bytes))
-                        .map_err(Error::from)
+                        .map_err(|e| Error::with_chain(e, "Error writing asset"))
                 }
                 _ => Ok(()),
             }
@@ -310,13 +326,15 @@ where S: Service<Request = Request, Response = Response, Error = hyper::Error> +
 {
     let outcome = Summary::File(presigned_url);
 
+    debug!(logger, "Summary sent to callback: {:?}", outcome);
+
     let callback_response = future::result(serde_json::to_vec(&outcome))
-        .map_err(|err| Error::from(err))
+        .map_err(|err| Error::with_chain(err, "Error encoding the rendering outcome"))
         .and_then(move |body| {
             let req = Request::new(hyper::Method::Post, callback_url)
                 .with_body(body.into());
             client.call(req)
-                .map_err(|err| Error::from(err))
+                .map_err(|err| Error::with_chain(err, "Error posting to callback URL"))
         });
 
     let response_bytes = {
@@ -349,8 +367,9 @@ where S: Service<Request = Request, Response = Response, Error = hyper::Error> +
 fn report_failure<S>(logger: Logger, client: S, error: Error, callback_url: Uri) -> Box<Future<Item=(), Error=Error>>
     where S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static
 {
-    error!(logger, format!("Reporting error: {}", error));
+    error!(logger, "Reporting error: {}\n{:?}", error, error.backtrace());
     let outcome = Summary::Error(format!("{}", error));
+    debug!(logger, "Summary sent to callback: {:?}", outcome);
     let res = future::result(serde_json::to_vec(&outcome))
         .map_err(Error::from)
         .and_then(move |body| {
