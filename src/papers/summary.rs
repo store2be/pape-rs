@@ -19,6 +19,9 @@ mod tests {
     #[test]
     fn it_serializes_success_as_expected() {
         let summary = Summary::File("https://example.com/the_file.pdf".to_string());
-        assert_eq!(&to_string(&summary).unwrap(), "{\"file\":\"https://example.com/the_file.pdf\"}");
+        assert_eq!(
+            &to_string(&summary).unwrap(),
+            "{\"file\":\"https://example.com/the_file.pdf\"}"
+        );
     }
 }

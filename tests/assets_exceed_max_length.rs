@@ -51,9 +51,9 @@ fn test_assets_exceed_max_length() {
     ).with_body(document_spec.into())
         .with_header(ContentType(mime::APPLICATION_JSON));
 
-    let test = test_client.request(request).and_then(|res| {
-        Ok(res.status())
-    });
+    let test = test_client
+        .request(request)
+        .and_then(|res| Ok(res.status()));
 
     // Request
     let tests = test.map_err(|_| ());

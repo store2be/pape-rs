@@ -4,7 +4,7 @@ use std::str::FromStr;
 use slog::{self, Logger};
 use sloggers::{self, Build};
 use sloggers::types::Severity;
-use rusoto::credential::{AwsCredentials, ProvideAwsCredentials, CredentialsError};
+use rusoto::credential::{AwsCredentials, CredentialsError, ProvideAwsCredentials};
 use chrono::{DateTime, Duration, Utc};
 use rusoto::region::Region;
 
@@ -79,13 +79,22 @@ impl Config {
 
         let max_assets_per_document = max_assets_per_document(&logger);
 
-        let aws_region_string = ::std::env::var("PAPERS_AWS_REGION").expect("The PAPERS_AWS_REGION environment variable was not provided");
+        let aws_region_string = ::std::env::var("PAPERS_AWS_REGION").expect(
+            "The PAPERS_AWS_REGION environment variable was not provided",
+        );
 
         let s3 = S3Config {
-            bucket: ::std::env::var("PAPERS_S3_BUCKET").expect("The PAPERS_BUCKET environment variable was not provided"),
-            access_key: ::std::env::var("PAPERS_AWS_ACCESS_KEY").expect("The PAPERS_AWS_ACCESS_KEY environment variable was not provided"),
-            secret_key: ::std::env::var("PAPERS_AWS_SECRET_KEY").expect("The PAPERS_AWS_SECRET_KEY environment variable was not provided"),
-            region: aws_region_string.parse().expect("The provided AWS region is not valid"),
+            bucket: ::std::env::var("PAPERS_S3_BUCKET")
+                .expect("The PAPERS_BUCKET environment variable was not provided"),
+            access_key: ::std::env::var("PAPERS_AWS_ACCESS_KEY").expect(
+                "The PAPERS_AWS_ACCESS_KEY environment variable was not provided",
+            ),
+            secret_key: ::std::env::var("PAPERS_AWS_SECRET_KEY").expect(
+                "The PAPERS_AWS_SECRET_KEY environment variable was not provided",
+            ),
+            region: aws_region_string
+                .parse()
+                .expect("The provided AWS region is not valid"),
         };
 
         Config {
@@ -115,7 +124,7 @@ impl<'a> ProvideAwsCredentials for &'a Config {
             self.s3.access_key.clone(),
             self.s3.secret_key.clone(),
             None,
-            DateTime::<Utc>::checked_add_signed(Utc::now(), Duration::days(1)).unwrap()
+            DateTime::<Utc>::checked_add_signed(Utc::now(), Duration::days(1)).unwrap(),
         ))
     }
 }

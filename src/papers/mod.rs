@@ -2,18 +2,18 @@ mod document_spec;
 mod summary;
 
 use mime;
-use futures::future::{Future, ok, err, result};
+use futures::future::{err, ok, result, Future};
 use futures::sync::oneshot;
 use hyper;
-use hyper::{Get, Post, Head, StatusCode};
+use hyper::{Get, Head, Post, StatusCode};
 use hyper::client::{Client, HttpConnector};
-use hyper::server::{Request, Response, Service, NewService};
+use hyper::server::{NewService, Request, Response, Service};
 use hyper::header::{Authorization, Bearer};
 use hyper_tls::HttpsConnector;
 use serde_json;
 use slog;
 use std::marker::PhantomData;
-use tokio_core::reactor::{Remote, Handle};
+use tokio_core::reactor::{Handle, Remote};
 
 use http::*;
 use error::{Error, ErrorKind};
@@ -75,11 +75,9 @@ where
                     return Err(Error::from_kind(ErrorKind::Forbidden));
                 }
             }
-            None => {
-                if self.config.auth != "" {
-                    return Err(Error::from_kind(ErrorKind::Forbidden));
-                }
-            }
+            None => if self.config.auth != "" {
+                return Err(Error::from_kind(ErrorKind::Forbidden));
+            },
         }
         Ok(())
     }

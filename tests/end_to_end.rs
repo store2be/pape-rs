@@ -7,7 +7,7 @@ extern crate papers;
 extern crate serde_json as json;
 
 use futures::future;
-use futures::{Future, Stream, Sink};
+use futures::{Future, Sink, Stream};
 use hyper::client::{Client, Request};
 use hyper::server;
 use hyper::header::ContentType;
@@ -50,12 +50,13 @@ impl server::Service for MockServer {
             }
             "/callback" => {
                 // let bytes = req.get_body_bytes().wait().expect("could not read response");
-                // let summary = json::from_slice::<Summary>(&bytes).expect("response was not valid");
+                // let summary =
+                // json::from_slice::<Summary>(&bytes).expect("response was not valid");
                 // if let Summary::Error(err) = summary {
                 //     panic!("Error reported to callback endpoint: {}", err);
                 // }
                 server::Response::new()
-            },
+            }
             _ => server::Response::new().with_status(hyper::StatusCode::NotFound),
 
         };
@@ -142,5 +143,8 @@ fn test_end_to_end() {
 
     let (status, body) = core.run(tests).expect("tests failed");
     assert_eq!(status, hyper::StatusCode::Ok);
-    assert_eq!(::std::str::from_utf8(&body).expect("body is not valid utf8"), "");
+    assert_eq!(
+        ::std::str::from_utf8(&body).expect("body is not valid utf8"),
+        ""
+    );
 }

@@ -6,10 +6,10 @@ use hyper;
 use hyper::client::HttpConnector;
 use hyper_tls::HttpsConnector;
 use hyper::server::{self, Service};
-use hyper::header::{Header, ContentDisposition, ContentType, DispositionParam};
+use hyper::header::{ContentDisposition, ContentType, DispositionParam, Header};
 use hyper::{Request, Response};
 use hyper::header::Location;
-use hyper::{Uri, StatusCode};
+use hyper::{StatusCode, Uri};
 use tokio_core::reactor::Handle;
 
 pub fn https_connector(handle: &Handle) -> HttpsConnector<HttpConnector> {
@@ -83,21 +83,19 @@ impl ResponseExt for Response {
             Some(&ContentDisposition {
                 parameters: ref params,
                 ..
-            }) => {
-                params
-                    .iter()
-                    .find(|param| match **param {
-                        DispositionParam::Filename(_, _, _) => true,
-                        _ => false,
-                    })
-                    .and_then(|param| {
-                        if let DispositionParam::Filename(_, _, ref bytes) = *param {
-                            String::from_utf8(bytes.to_owned()).ok()
-                        } else {
-                            None
-                        }
-                    })
-            }
+            }) => params
+                .iter()
+                .find(|param| match **param {
+                    DispositionParam::Filename(_, _, _) => true,
+                    _ => false,
+                })
+                .and_then(|param| {
+                    if let DispositionParam::Filename(_, _, ref bytes) = *param {
+                        String::from_utf8(bytes.to_owned()).ok()
+                    } else {
+                        None
+                    }
+                }),
             _ => None,
         }
     }
@@ -206,11 +204,9 @@ mod tests {
 
         fn call(&self, req: Self::Request) -> Self::Future {
             let res = match req.path() {
-                "/assets/logo.png" => {
-                    server::Response::new()
-                        .with_body(b"54321" as &[u8])
-                        .with_header(self.response_to_logo_png.clone())
-                }
+                "/assets/logo.png" => server::Response::new()
+                    .with_body(b"54321" as &[u8])
+                    .with_header(self.response_to_logo_png.clone()),
                 _ => server::Response::new().with_status(hyper::StatusCode::NotFound),
 
             };

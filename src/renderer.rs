@@ -4,7 +4,7 @@ use futures::future;
 use futures::Future;
 use futures_cpupool::CpuPool;
 use hyper;
-use hyper::{Response, Request, Uri};
+use hyper::{Request, Response, Uri};
 use hyper::server::Service;
 use mktemp::Temp;
 use std::io::prelude::*;
@@ -19,7 +19,7 @@ use rusoto::region;
 use serde_json;
 use s3;
 use s3::S3;
-use slog::{Logger, Duplicate, Drain};
+use slog::{Drain, Duplicate, Logger};
 use sloggers::Build;
 use sloggers::types::Severity;
 use sloggers::file::FileLoggerBuilder;
@@ -194,7 +194,11 @@ where
                 debug!(logger, "Spawning latex");
                 debug!(logger, "template_path {:?}", template_path);
                 debug!(logger, "temp_dir_path {:?}", temp_dir_path);
-                debug!(logger, "Rendered template exists: {:?}", template_path.exists());
+                debug!(
+                    logger,
+                    "Rendered template exists: {:?}",
+                    template_path.exists()
+                );
                 Command::new("xelatex")
                     .current_dir(&temp_dir_path)
                     .arg("-interaction=nonstopmode")
@@ -232,14 +236,18 @@ where
             let logger = logger.clone();
             let pool = pool.clone();
             let key = format!("{}/{}", &s3_prefix, "rendered.pdf");
-            output_path
-                .and_then(move |path| {
-                    pool.spawn_fn(move || {
-                        debug!(logger, "Uploading the rendered pdf as {:?} / {:?}", config.s3.bucket, key);
-                        post_to_s3(config, &path, key.clone())?;
-                        get_presigned_url(config, key)
-                    })
+            output_path.and_then(move |path| {
+                pool.spawn_fn(move || {
+                    debug!(
+                        logger,
+                        "Uploading the rendered pdf as {:?} / {:?}",
+                        config.s3.bucket,
+                        key
+                    );
+                    post_to_s3(config, &path, key.clone())?;
+                    get_presigned_url(config, key)
                 })
+            })
         };
 
         let callback_response = {
@@ -256,8 +264,9 @@ where
         let handle_errors = {
             let logger = logger.clone();
             let client = self.client.clone();
-            callback_response
-                .or_else(move |error| report_failure(logger, client, error, callback_url.0))
+            callback_response.or_else(move |error| {
+                report_failure(logger, client, error, callback_url.0)
+            })
         };
 
         let tarred_workspace_uploaded = {
@@ -265,13 +274,11 @@ where
             let key = format!("{}/{}", &s3_prefix, "workspace.tar");
             let temp_dir_path = temp_dir_path.clone();
             let logger = logger.clone();
-            handle_errors.then(move |_| {
-                pool.spawn_fn(move || {
-                    upload_workspace(config, logger, temp_dir_path, key)
+            handle_errors
+                .then(move |_| {
+                    pool.spawn_fn(move || upload_workspace(config, logger, temp_dir_path, key))
                 })
-            }).map_err(move |_| {
-                let _hold = dir;
-            })
+                .map_err(move |_| { let _hold = dir; })
         };
 
 
@@ -290,8 +297,15 @@ fn make_file_logger(logger: Logger, path: &Path) -> Logger {
     Logger::root(drain, o!())
 }
 
-fn download_assets<S>(config: &'static Config, logger: Logger, temp_dir_path: PathBuf, client: S, assets_urls: Vec<PapersUri>) -> Box<Future<Item=Vec<()>, Error=Error>>
-where S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static + Clone
+fn download_assets<S>(
+    config: &'static Config,
+    logger: Logger,
+    temp_dir_path: PathBuf,
+    client: S,
+    assets_urls: Vec<PapersUri>,
+) -> Box<Future<Item = Vec<()>, Error = Error>>
+where
+    S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static + Clone,
 {
     let max_asset_size = config.max_asset_size.clone();
     debug!(logger, "Downloading assets {:?}", assets_urls);
@@ -325,20 +339,29 @@ where S: Service<Request = Request, Response = Response, Error = hyper::Error> +
 }
 
 
-fn report_success<S>(config: &'static Config, logger: Logger, client: S, callback_url: Uri, presigned_url: String) -> Box<Future<Item=(), Error=Error>>
-where S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static + Clone
+fn report_success<S>(
+    config: &'static Config,
+    logger: Logger,
+    client: S,
+    callback_url: Uri,
+    presigned_url: String,
+) -> Box<Future<Item = (), Error = Error>>
+where
+    S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static + Clone,
 {
     let outcome = Summary::File(presigned_url);
 
     debug!(logger, "Summary sent to callback: {:?}", outcome);
 
     let callback_response = future::result(serde_json::to_vec(&outcome))
-        .map_err(|err| Error::with_chain(err, "Error encoding the rendering outcome"))
+        .map_err(|err| {
+            Error::with_chain(err, "Error encoding the rendering outcome")
+        })
         .and_then(move |body| {
-            let req = Request::new(hyper::Method::Post, callback_url)
-                .with_body(body.into());
-            client.call(req)
-                .map_err(|err| Error::with_chain(err, "Error posting to callback URL"))
+            let req = Request::new(hyper::Method::Post, callback_url).with_body(body.into());
+            client.call(req).map_err(|err| {
+                Error::with_chain(err, "Error posting to callback URL")
+            })
         });
 
     let response_bytes = {
@@ -349,7 +372,7 @@ where S: Service<Request = Request, Response = Response, Error = hyper::Error> +
                 logger,
                 "Callback response: {}",
                 response.status().canonical_reason().unwrap_or("unknown")
-                );
+            );
 
             response.get_body_bytes_with_limit(max_asset_size)
         })
@@ -362,14 +385,20 @@ where S: Service<Request = Request, Response = Response, Error = hyper::Error> +
                 logger,
                 "Callback response body: {:?}",
                 ::std::str::from_utf8(&bytes).unwrap_or("<binary content>")
-                );
+            );
             future::ok(())
         })
     })
 }
 
-fn report_failure<S>(logger: Logger, client: S, error: Error, callback_url: Uri) -> Box<Future<Item=(), Error=Error>>
-    where S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static
+fn report_failure<S>(
+    logger: Logger,
+    client: S,
+    error: Error,
+    callback_url: Uri,
+) -> Box<Future<Item = (), Error = Error>>
+where
+    S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static,
 {
     error!(logger, "Reporting error: {}", error.display_chain());
     let outcome = Summary::Error(format!("{}", error));
@@ -377,17 +406,19 @@ fn report_failure<S>(logger: Logger, client: S, error: Error, callback_url: Uri)
     let res = future::result(serde_json::to_vec(&outcome))
         .map_err(Error::from)
         .and_then(move |body| {
-            let req = Request::new(hyper::Method::Post, callback_url)
-                .with_body(body.into());
-            client.call(req)
-                .map_err(Error::from)
-        }).map(|_| ());
+            let req = Request::new(hyper::Method::Post, callback_url).with_body(body.into());
+            client.call(req).map_err(Error::from)
+        })
+        .map(|_| ());
     Box::new(res)
 }
 
-fn post_to_s3(config: &'static Config, path: &Path, key: String) -> Result<(), Error>
-{
-    let client = s3::S3Client::new(rusoto::request::default_tls_client().expect("could not create TLS client"), config, region::Region::EuCentral1);
+fn post_to_s3(config: &'static Config, path: &Path, key: String) -> Result<(), Error> {
+    let client = s3::S3Client::new(
+        rusoto::request::default_tls_client().expect("could not create TLS client"),
+        config,
+        region::Region::EuCentral1,
+    );
     let mut body: Vec<u8> = Vec::new();
     let mut file = File::open(path)?;
     file.read_to_end(&mut body)?;
@@ -402,20 +433,37 @@ fn post_to_s3(config: &'static Config, path: &Path, key: String) -> Result<(), E
 }
 
 fn get_presigned_url(config: &'static Config, key: String) -> Result<String, Error> {
-    let client = s3::S3Client::new(rusoto::request::default_tls_client().expect("could not create TLS client"), config, region::Region::EuCentral1);
+    let client = s3::S3Client::new(
+        rusoto::request::default_tls_client().expect("could not create TLS client"),
+        config,
+        region::Region::EuCentral1,
+    );
     let request = s3::GetObjectRequest {
         bucket: config.s3.bucket.clone(),
         key,
         ..Default::default()
     };
-    client.presigned_url(&request).map_err(|err| Error::with_chain(err, "Could not generate presigned url"))
+    client.presigned_url(&request).map_err(|err| {
+        Error::with_chain(err, "Could not generate presigned url")
+    })
 }
 
-fn upload_workspace(config: &'static Config, logger: Logger, workspace: PathBuf, key: String) -> Result<(), Error> {
+fn upload_workspace(
+    config: &'static Config,
+    logger: Logger,
+    workspace: PathBuf,
+    key: String,
+) -> Result<(), Error> {
     debug!(logger, "Tarring {:?}", workspace);
     let mut tarred_workspace: Vec<u8> = Vec::new();
     {
-        let dir_name: PathBuf = workspace.clone().components().last().unwrap().as_os_str().into();
+        let dir_name: PathBuf = workspace
+            .clone()
+            .components()
+            .last()
+            .unwrap()
+            .as_os_str()
+            .into();
         debug!(logger, "tar {:?} as {:?}", &workspace, &dir_name);
         let mut tarrer = tar::Builder::new(&mut tarred_workspace);
         tarrer.append_dir_all(&dir_name, &workspace)?;
@@ -423,7 +471,11 @@ fn upload_workspace(config: &'static Config, logger: Logger, workspace: PathBuf,
         tarrer.finish()?;
     }
 
-    let client = s3::S3Client::new(rusoto::request::default_tls_client().expect("could not create TLS client"), config, region::Region::EuCentral1);
+    let client = s3::S3Client::new(
+        rusoto::request::default_tls_client().expect("could not create TLS client"),
+        config,
+        region::Region::EuCentral1,
+    );
     let request = s3::PutObjectRequest {
         body: Some(tarred_workspace),
         bucket: config.s3.bucket.clone(),
