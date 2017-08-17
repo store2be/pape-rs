@@ -352,8 +352,8 @@ where
     Box::new(future::join_all(futures))
 }
 
-/// This reports to the provided callback url with the presigned URL of the generated PDF.
-/// It returns the response from the callback url as a future.
+/// This reports to the provided callback url with the presigned URL of the generated PDF and the
+/// location of the debugging output. It returns the response from the callback url as a future.
 fn report_success<S>(
     config: &'static Config,
     logger: Logger,
