@@ -450,6 +450,7 @@ fn post_to_s3(config: &'static Config, path: &Path, key: String) -> Result<(), E
         config,
         config.s3.region,
     );
+    debug!(config.logger, "Uploading {:?} to {:?}", path, key);
     let mut body: Vec<u8> = Vec::new();
     let mut file = File::open(path)?;
     file.read_to_end(&mut body)?;
@@ -511,7 +512,14 @@ fn upload_workspace(
         tarrer.finish()?;
     }
 
-    post_to_s3(config, &workspace, key)
+    // Write the tarred workspace to disk
+    let mut tar_file_path = workspace.to_path_buf();
+    tar_file_path.push("workspace.tar");
+    let mut output_file = File::create(&tar_file_path)?;
+    output_file.write_all(&tarred_workspace);
+
+    // Upload the tarred workspace to S3
+    post_to_s3(config, &tar_file_path, key)
 }
 
 #[cfg(test)]
