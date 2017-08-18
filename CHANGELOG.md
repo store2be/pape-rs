@@ -5,6 +5,11 @@
 
 ## Unreleased
 
+## [0.2.1] - 2017-08-18
+- 🐛  Actually upload the workspace.tar
+- 🐛  Set the Content-Type header when posting to callback url
+- 🐛  Fix terminal output in k8s
+
 ## [0.2.0] - 2017-08-17
 * Major change in the interface of the service. Papers now uploads the rendered
   PDF and the build artifact directly to an S3 bucket, which requires
