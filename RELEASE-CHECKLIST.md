@@ -21,14 +21,15 @@ $ cargo build --release
 ## Build the Docker image
 
 ```
-$ TODO
+$ docker build -f docker/Dockerfile -t store2be/pape-rs:<version> .
 ```
 
 
 ## Upload the Docker image to Docker Hub
 
 ```
-$ TODO
+$ docker push store2be/pape-rs:<version>
+$ docker push store2be/pape-rs  # for the 'latest' tag
 ```
 
 
