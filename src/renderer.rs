@@ -25,6 +25,7 @@ use sloggers::file::FileLoggerBuilder;
 use std::default::Default;
 use std::fs::File;
 use error_chain::ChainedError;
+use mime;
 
 use http::*;
 use papers::{DocumentSpec, PapersUri, Summary};
@@ -377,7 +378,9 @@ where
             Error::with_chain(err, "Error encoding the rendering outcome")
         })
         .and_then(move |body| {
-            let req = Request::new(hyper::Method::Post, callback_url).with_body(body.into());
+            let req = Request::new(hyper::Method::Post, callback_url).with_body(body.into())
+                .with_header(hyper::header::ContentType(mime::APPLICATION_JSON));
+
             client.call(req).map_err(|err| {
                 Error::with_chain(err, "Error posting to callback URL")
             })
@@ -432,7 +435,8 @@ where
     let res = future::result(serde_json::to_vec(&outcome))
         .map_err(Error::from)
         .and_then(move |body| {
-            let req = Request::new(hyper::Method::Post, callback_url).with_body(body.into());
+            let req = Request::new(hyper::Method::Post, callback_url).with_body(body.into())
+                .with_header(hyper::header::ContentType(mime::APPLICATION_JSON));
             client.call(req).map_err(Error::from)
         })
         .map(|_| ());
