@@ -25,6 +25,7 @@ use sloggers::file::FileLoggerBuilder;
 use std::default::Default;
 use std::fs::File;
 use error_chain::ChainedError;
+use mime;
 
 use http::*;
 use papers::{DocumentSpec, PapersUri, Summary};
@@ -377,7 +378,9 @@ where
             Error::with_chain(err, "Error encoding the rendering outcome")
         })
         .and_then(move |body| {
-            let req = Request::new(hyper::Method::Post, callback_url).with_body(body.into());
+            let req = Request::new(hyper::Method::Post, callback_url).with_body(body.into())
+                .with_header(hyper::header::ContentType(mime::APPLICATION_JSON));
+
             client.call(req).map_err(|err| {
                 Error::with_chain(err, "Error posting to callback URL")
             })
@@ -432,7 +435,8 @@ where
     let res = future::result(serde_json::to_vec(&outcome))
         .map_err(Error::from)
         .and_then(move |body| {
-            let req = Request::new(hyper::Method::Post, callback_url).with_body(body.into());
+            let req = Request::new(hyper::Method::Post, callback_url).with_body(body.into())
+                .with_header(hyper::header::ContentType(mime::APPLICATION_JSON));
             client.call(req).map_err(Error::from)
         })
         .map(|_| ());
@@ -446,6 +450,7 @@ fn post_to_s3(config: &'static Config, path: &Path, key: String) -> Result<(), E
         config,
         config.s3.region,
     );
+    debug!(config.logger, "Uploading {:?} to {:?}", path, key);
     let mut body: Vec<u8> = Vec::new();
     let mut file = File::open(path)?;
     file.read_to_end(&mut body)?;
@@ -507,7 +512,14 @@ fn upload_workspace(
         tarrer.finish()?;
     }
 
-    post_to_s3(config, &workspace, key)
+    // Write the tarred workspace to disk
+    let mut tar_file_path = workspace.to_path_buf();
+    tar_file_path.push("workspace.tar");
+    let mut output_file = File::create(&tar_file_path)?;
+    output_file.write_all(&tarred_workspace);
+
+    // Upload the tarred workspace to S3
+    post_to_s3(config, &tar_file_path, key)
 }
 
 #[cfg(test)]
