@@ -91,7 +91,7 @@ impl Config {
 
         let s3 = S3Config {
             bucket: ::std::env::var("PAPERS_S3_BUCKET")
-                .expect("The PAPERS_BUCKET environment variable was not provided"),
+                .expect("The PAPERS_S3_BUCKET environment variable was not provided"),
             access_key: ::std::env::var("PAPERS_AWS_ACCESS_KEY").expect(
                 "The PAPERS_AWS_ACCESS_KEY environment variable was not provided",
             ),

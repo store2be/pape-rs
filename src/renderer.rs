@@ -516,7 +516,7 @@ fn upload_workspace(
     let mut tar_file_path = workspace.to_path_buf();
     tar_file_path.push("workspace.tar");
     let mut output_file = File::create(&tar_file_path)?;
-    output_file.write_all(&tarred_workspace);
+    output_file.write_all(&tarred_workspace)?;
 
     // Upload the tarred workspace to S3
     post_to_s3(config, &tar_file_path, key)

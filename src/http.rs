@@ -6,7 +6,7 @@ use hyper;
 use hyper::client::HttpConnector;
 use hyper_tls::HttpsConnector;
 use hyper::server::{self, Service};
-use hyper::header::{ContentDisposition, ContentType, DispositionParam, Header};
+use hyper::header::{ContentDisposition, ContentType, DispositionParam, Header, TransferEncoding};
 use hyper::{Request, Response};
 use hyper::header::Location;
 use hyper::{StatusCode, Uri};
@@ -129,7 +129,7 @@ impl RequestExt for Request {
     fn with_body(self, body: hyper::Body) -> Self {
         let mut req = self;
         req.set_body(body);
-        req
+        req.with_header(TransferEncoding(vec![hyper::header::Encoding::Identity]))
     }
 }
 
