@@ -6,7 +6,7 @@ use hyper;
 use hyper::client::HttpConnector;
 use hyper_tls::HttpsConnector;
 use hyper::server::{self, Service};
-use hyper::header::{ContentDisposition, ContentType, DispositionParam, Header, TransferEncoding};
+use hyper::header::{ContentDisposition, ContentType, DispositionParam, Header, ContentLength};
 use hyper::{Request, Response};
 use hyper::header::Location;
 use hyper::{StatusCode, Uri};
@@ -114,7 +114,7 @@ impl ResponseExt for Response {
 pub trait RequestExt {
     fn with_header<T: Header>(self, header: T) -> Self;
 
-    fn with_body(self, body: hyper::Body) -> Self;
+    fn with_body(self, body: Vec<u8>) -> Self;
 }
 
 impl RequestExt for Request {
@@ -126,10 +126,11 @@ impl RequestExt for Request {
         self
     }
 
-    fn with_body(self, body: hyper::Body) -> Self {
+    fn with_body(self, body: Vec<u8>) -> Self {
         let mut req = self;
-        req.set_body(body);
-        req.with_header(TransferEncoding(vec![hyper::header::Encoding::Identity]))
+        let len = body.len();
+        req.set_body(hyper::Body::from(body));
+        req.with_header(ContentLength(len as u64))
     }
 }
 
@@ -208,7 +209,6 @@ mod tests {
                     .with_body(b"54321" as &[u8])
                     .with_header(self.response_to_logo_png.clone()),
                 _ => server::Response::new().with_status(hyper::StatusCode::NotFound),
-
             };
             Box::new(future::ok(res))
         }
