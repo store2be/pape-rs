@@ -213,6 +213,7 @@ where
         let output_path = {
             let logger = logger.clone();
             let temp_dir_path = temp_dir_path.clone();
+            let output_filename = output_filename.clone();
             latex_out
                 .and_then(move |output| {
                     let stdout = String::from_utf8(output.stdout).unwrap();
@@ -235,7 +236,7 @@ where
             let config = self.config.clone();
             let logger = logger.clone();
             let pool = pool.clone();
-            let key = format!("{}/{}", &s3_prefix, "rendered.pdf");
+            let key = format!("{}/{}", &s3_prefix, &output_filename);
             output_path.and_then(move |path| {
                 pool.spawn_fn(move || {
                     debug!(
