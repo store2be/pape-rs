@@ -5,10 +5,16 @@
 
 ## Unreleased
 
+## [0.2.2] - 2017-08-21
+* Properly set the Content-Type header when calling the callback URL.
+* Set the Content-Length header instead of Transfer-Encoding chunk when calling
+  the callback URL. Streaming HTTP is not properly supported by some HTTP
+  servers, including Puma (Rails).
+
 ## [0.2.1] - 2017-08-18
-- 🐛  Actually upload the workspace.tar
-- 🐛  Set the Content-Type header when posting to callback url
-- 🐛  Fix terminal output in k8s
+* 🐛  Actually upload the workspace.tar
+* 🐛  Set the Content-Type header when posting to callback url
+* 🐛  Fix terminal output in k8s
 
 ## [0.2.0] - 2017-08-17
 * Major change in the interface of the service. Papers now uploads the rendered
