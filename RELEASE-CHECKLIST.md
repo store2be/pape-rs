@@ -21,7 +21,7 @@ $ cargo build --release
 ## Build the Docker image
 
 ```
-$ docker build -f docker/Dockerfile -t store2be/pape-rs:<version> .
+$ docker build --no-cache=true -f docker/Dockerfile -t store2be/pape-rs:<version> .
 ```
 
 
