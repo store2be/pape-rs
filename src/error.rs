@@ -13,7 +13,6 @@ error_chain! {
     links {
     }
 
-
     foreign_links {
         Hyper(hyper::Error);
         Io(::std::io::Error);
@@ -30,13 +29,17 @@ error_chain! {
             description("Forbidden")
             display("Forbidden")
         }
+        InternalServerError {
+            description("Internal server error")
+            display("Internal server error")
+        }
         LatexFailed(output: String) {
             description("The latex command failed")
             display("The latex command failed with the following output:\n{}", output)
         }
-        InternalServerError {
-            description("Internal server error")
-            display("Internal server error")
+        MergeFailed(output: String) {
+            description("A document merge failed")
+            display("The provided documents could not be merged, output:\n{}", output)
         }
         UnprocessableEntity {
             description("Unprocessable entity")

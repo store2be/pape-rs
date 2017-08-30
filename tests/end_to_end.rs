@@ -78,7 +78,7 @@ fn test_end_to_end() {
     let (sender, receiver) = mpsc::channel(30);
 
     let _join_mock = std::thread::spawn(|| {
-        papers::server::Server::new().with_port(8019).start();
+        papers::server::Server::new().with_port(8019).start().unwrap();
     });
 
     let _join_papers = std::thread::spawn(move || {

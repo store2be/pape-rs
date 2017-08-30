@@ -4,12 +4,14 @@
 (critical comment about semver: https://gist.github.com/jashkenas/cbd2b088e20279ae2c8e)
 
 ## Unreleased
+* Add a /merge endpoint that takes a MergeSpec and merges documents into a
+  single PDF file using `pdfunite` and ImageMagick.
 
 ## [0.2.2] - 2017-08-21
 * Properly set the Content-Type header when calling the callback URL.
-* Set the Content-Length header instead of Transfer-Encoding chunk when calling
-  the callback URL. Streaming HTTP is not properly supported by some HTTP
-  servers, including Puma (Rails).
+* Set the Content-Length header instead of Transfer-Encoding: chunked header
+  when calling the callback URL. Streaming HTTP is not properly supported by
+  some HTTP servers, including Puma (Rails).
 
 ## [0.2.1] - 2017-08-18
 * 🐛  Actually upload the workspace.tar

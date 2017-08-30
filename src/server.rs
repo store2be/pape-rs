@@ -33,7 +33,7 @@ impl Server {
         Server { port, ..self }
     }
 
-    pub fn start(self) {
+    pub fn start(self) -> Result<(), ::std::io::Error> {
         let mut core = tokio_core::reactor::Core::new().unwrap();
         let papers_service: Papers<Client<HttpsConnector<_>>> =
             Papers::new(core.remote(), self.config);
@@ -58,7 +58,7 @@ impl Server {
             socket_addr
         );
 
-        core.run(work).unwrap()
+        core.run(work)
     }
 }
 

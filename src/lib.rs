@@ -1,6 +1,9 @@
 // Temporarily disabled because of warnings in error_chain
 // #![deny(warnings)]
 
+// `error_chain!` can recurse deeply
+#![recursion_limit = "1024"]
+
 extern crate dotenv;
 extern crate chrono;
 #[macro_use]
@@ -39,6 +42,7 @@ pub mod http;
 mod human_size;
 pub mod papers;
 pub mod renderer;
+mod utils;
 pub mod server;
 pub mod test_utils;
 

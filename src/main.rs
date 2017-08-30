@@ -8,4 +8,5 @@ fn main() {
     papers::server::Server::new()
         .with_port(port.parse().unwrap())
         .start()
+        .unwrap()
 }
