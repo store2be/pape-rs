@@ -76,7 +76,7 @@ pub fn test_end_to_end() {
     let (sender, receiver) = mpsc::channel(30);
 
     let mock_port = toolbox::random_port();
-    let papers_port: u16 = toolbox::random_port();
+    let papers_port = toolbox::random_port();
 
     let mut join_papers = pool.spawn_fn(move || {
         papers::server::Server::new().with_port(papers_port as i32).start()
