@@ -7,7 +7,10 @@
 
 ## [0.2.3] - 2017-08-31
 * Add a `/merge` endpoint that takes a MergeSpec and merges documents into a
-  single PDF file using `pdfunite` and ImageMagick.
+  single PDF file using `pdfunite` and ImageMagick. This is needed for merging
+  PDF documents that contain forms (merging can otherwise be done simply with
+  latex and `pdfpages`). In the current state, it only preserves the forms on
+  the first document being merged due to limitations with available CLI tools.
 
 ## [0.2.2] - 2017-08-21
 * Properly set the Content-Type header when calling the callback URL.

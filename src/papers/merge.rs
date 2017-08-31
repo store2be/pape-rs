@@ -17,13 +17,24 @@ use utils::callbacks::*;
 use utils::s3::*;
 use utils::logging::file_logger;
 
+/// This function does the whole merging process from a `MergeSpec`.
+///
+/// It:
+///
+/// - Downloads the documents to merge
+/// - Converts those that are not PDFs to PDF
+/// - Merges the PDFs
+/// - Uploads the result to S3
+/// - Reports to the `callback_url` from the `MergeSpec` with the error or presigned url of the
+///   generated document.
+/// - Uploads the debugging output to S3 as a tar file.
 pub fn merge_documents(config: &'static Config, handle: &Handle, spec: MergeSpec) -> Box<Future<Item = (), Error = ()>> {
     let pool = CpuPool::new(3);
     let temp_dir = Temp::new_dir().expect("Could not create a temporary directory");
     let max_asset_size = config.max_asset_size.clone();
     let logger = file_logger(config.logger.clone(), temp_dir.as_ref());
     let s3_prefix = s3_dir_name();
-    debug!(logger, "Downloading PDFs for mergin: {:?}", &spec.assets_urls);
+    debug!(logger, "Downloading PDFs for merging: {:?}", &spec.assets_urls);
 
     let client = Client::configure()
         .connector(https_connector(handle))
@@ -60,7 +71,6 @@ pub fn merge_documents(config: &'static Config, handle: &Handle, spec: MergeSpec
     };
 
     let paths = future::join_all(assets_downloads);
-
 
     // Convert non-PDF files to PDF with imagemagick
     let converted_paths = {

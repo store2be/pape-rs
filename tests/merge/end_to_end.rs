@@ -102,9 +102,6 @@ pub fn test_end_to_end() {
     let merge_spec = format!("{{
         \"assets_urls\": [\"http://127.0.0.1:{port}/logo.png\", \"http://127.0.0.1:{port}/doc.pdf\"],
         \"callback_url\": \"http://127.0.0.1:{port}/callback\",
-        \"variables\": {{
-            \"who\": \"peter\"
-        }}
     }}", port=mock_port);
 
     let request: Request<hyper::Body> = Request::new(
