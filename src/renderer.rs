@@ -12,10 +12,8 @@ use std::process::Command;
 use tokio_core::reactor::Handle;
 use tokio_process::CommandExt;
 use tera::Tera;
-use slog::{Drain, Duplicate, Logger};
-use sloggers::Build;
-use sloggers::types::Severity;
-use sloggers::file::FileLoggerBuilder;
+use slog::Logger;
+use utils::logging::file_logger;
 
 use http::*;
 use papers::{DocumentSpec, PapersUri};
@@ -95,7 +93,7 @@ where
         let dir = dir.unwrap();
 
         let temp_dir_path = dir.to_path_buf();
-        let logger = make_file_logger(self.config.logger.clone(), &temp_dir_path);
+        let logger = file_logger(self.config.logger.clone(), &temp_dir_path);
 
         let mut template_path = temp_dir_path.clone();
         template_path.push(Path::new(
@@ -275,21 +273,6 @@ where
 
         Box::new(tarred_workspace_uploaded)
     }
-}
-
-/// This returns a logger that also logs to the file pointed by the path parameter on top of the
-/// provided logger. The returned logger logs to both outputs.
-///
-/// The file logger has the debug level since this is what we want for debugging.
-fn make_file_logger(logger: Logger, path: &Path) -> Logger {
-    let mut dest = path.to_path_buf();
-    dest.push("logs.txt");
-    let file_drain = FileLoggerBuilder::new(dest)
-        .level(Severity::Debug)
-        .build()
-        .expect("Could not create a file logger");
-    let drain = Duplicate::new(logger.clone(), file_drain).fuse();
-    Logger::root(drain, o!())
 }
 
 /// Downloads all assets from the document spec in the workspace in parallel. It fails if any of

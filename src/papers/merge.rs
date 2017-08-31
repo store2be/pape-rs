@@ -15,12 +15,13 @@ use slog::Logger;
 use std::path::*;
 use utils::callbacks::*;
 use utils::s3::*;
+use utils::logging::file_logger;
 
 pub fn merge_documents(config: &'static Config, handle: &Handle, spec: MergeSpec) -> Box<Future<Item = (), Error = ()>> {
     let pool = CpuPool::new(3);
     let temp_dir = Temp::new_dir().expect("Could not create a temporary directory");
     let max_asset_size = config.max_asset_size.clone();
-    let logger = config.logger.clone();
+    let logger = file_logger(config.logger.clone(), temp_dir.as_ref());
     let s3_prefix = s3_dir_name();
     debug!(logger, "Downloading PDFs for mergin: {:?}", &spec.assets_urls);
 
