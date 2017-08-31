@@ -4,7 +4,9 @@
 (critical comment about semver: https://gist.github.com/jashkenas/cbd2b088e20279ae2c8e)
 
 ## Unreleased
-* Add a /merge endpoint that takes a MergeSpec and merges documents into a
+
+## [0.2.3] - 2017-08-31
+* Add a `/merge` endpoint that takes a MergeSpec and merges documents into a
   single PDF file using `pdfunite` and ImageMagick.
 
 ## [0.2.2] - 2017-08-21

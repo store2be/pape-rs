@@ -1,6 +1,6 @@
 [package]
 name = "papers"
-version = "0.2.2"
+version = "0.2.3"
 authors = [
     "Peter Gundel <peter.gundel@store2be.com",
     "Fausto Núñez Alberro <fausto.nunez@store2be.com>",
