@@ -99,10 +99,10 @@ pub fn test_end_to_end() {
     let handle = core.handle();
     let test_client = Client::new(&handle.clone());
 
-    let merge_spec = format!("{{
-        \"assets_urls\": [\"http://127.0.0.1:{port}/logo.png\", \"http://127.0.0.1:{port}/doc.pdf\"],
-        \"callback_url\": \"http://127.0.0.1:{port}/callback\",
-    }}", port=mock_port);
+    let merge_spec = format!(r#"{{
+        "assets_urls": ["http://127.0.0.1:{port}/logo.png", "http://127.0.0.1:{port}/doc.pdf"],
+        "callback_url": "http://127.0.0.1:{port}/callback"
+    }}"#, port=mock_port);
 
     let request: Request<hyper::Body> = Request::new(
         hyper::Method::Post,

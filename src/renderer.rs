@@ -22,6 +22,17 @@ use config::Config;
 use utils::s3::*;
 use utils::callbacks::*;
 
+struct Context {
+    assets_urls: Vec<PapersUri>,
+    callback_url: PapersUri,
+    config: &'static Config,
+    logger: Logger,
+    output_filename: String,
+    pool: CpuPool,
+    s3_prefix: String,
+    tmp_dir: PathBuf,
+}
+
 #[derive(Debug)]
 pub struct Renderer<S>
 where
@@ -116,137 +127,116 @@ where
             ..
         } = document_spec;
 
-        let res = self.get_template(&template_url.0);
+        let context = Context {
+            assets_urls,
+            callback_url: callback_url.clone(),
+            config: self.config,
+            logger: logger.clone(),
+            tmp_dir: temp_dir_path.to_path_buf(),
+            s3_prefix: s3_prefix.clone(),
+            output_filename: output_filename.clone(),
+            pool: pool.clone(),
+        };
 
-        debug!(logger, "Starting Renderer worker");
+        let res = self.get_template(&template_url.0);
+        let client = self.client.clone();
+
+        debug!(context.logger, "Starting Renderer worker");
 
         // First download the template and populate it
         let bytes = res.and_then(move |res| res.get_body_bytes_with_limit(max_asset_size));
 
-        let template_string = {
-            let logger = logger.clone();
-            bytes.and_then(move |bytes| {
-                debug!(logger, "Successfully downloaded the template");
-                String::from_utf8(bytes).map_err(Error::from)
-            })
-        };
-
-        let rendered_template = template_string.and_then(move |template_string| {
-            Tera::one_off(&template_string, &variables, false).map_err(Error::from)
+        let template_string = bytes.and_then(move |bytes| {
+            debug!(context.logger, "Successfully downloaded the template");
+            String::from_utf8(bytes)
+                .map(|s| (context, s))
+                .map_err(Error::from)
         });
 
-        let written_template_path = {
-            let logger = logger.clone();
-            let template_path = template_path.clone();
-            rendered_template.and_then(move |latex_string| {
-                debug!(logger, "Writing template to {:?}", &template_path);
-                let mut file = ::std::fs::File::create(&template_path)?;
-                file.write_all(latex_string.as_bytes())
-                    .expect("could not write latex file");
-                debug!(
-                    logger,
-                    "Template successfully written to {:?}",
-                    &template_path
-                );
-                Ok(template_path)
-            })
-        };
+        let rendered_template = template_string.and_then(move |(context, template_string)| {
+            Tera::one_off(&template_string, &variables, false)
+                .map(|rendered| (context, rendered))
+                .map_err(Error::from)
+        });
 
+        let written_template_path = rendered_template.and_then(move |(context, latex_string)| {
+            debug!(context.logger, "Writing template to {:?}", &template_path);
+            let mut file = ::std::fs::File::create(&template_path)?;
+            file.write_all(latex_string.as_bytes())
+                .expect("could not write latex file");
+            debug!(
+                context.logger,
+                "Template successfully written to {:?}",
+                &template_path
+                );
+            Ok((context, template_path))
+        });
+
+        let download_client = client.clone();
         // Download the assets and save them in the temporary directory
-        let files_written = {
-            let config = self.config.clone();
-            let logger = logger.clone();
-            let temp_dir_path = temp_dir_path.clone();
-            let client = self.client.clone();
-            written_template_path.and_then(move |_| {
-                download_assets(config, logger, temp_dir_path, client, assets_urls)
-            })
-        };
+        let files_written = written_template_path
+            .and_then(move |(context, template_path)| {
+                download_assets(context, download_client)
+                    .map(|(context, _)| (context, template_path))
+            });
 
         // Then run latex
         let latex_out = {
             let handle = self.handle.clone();
-            let template_path = template_path.clone();
-            let temp_dir_path = temp_dir_path.clone();
-            let logger = logger.clone();
-            files_written.and_then(move |_| {
-                debug!(logger, "Spawning latex");
-                debug!(logger, "template_path {:?}", template_path);
-                debug!(logger, "temp_dir_path {:?}", temp_dir_path);
+            files_written.and_then(move |(context, template_path)| {
+                debug!(context.logger, "Spawning latex");
+                debug!(context.logger, "template_path {:?}", template_path);
+                debug!(context.logger, "tmp_dir {:?}", context.tmp_dir);
                 debug!(
-                    logger,
+                    context.logger,
                     "Rendered template exists: {:?}",
                     template_path.exists()
                 );
                 Command::new("xelatex")
-                    .current_dir(&temp_dir_path)
+                    .current_dir(&context.tmp_dir)
                     .arg("-interaction=nonstopmode")
                     .arg("-file-line-error")
                     .arg("-shell-restricted")
                     .arg(template_path)
                     .output_async(&handle)
+                    .map(|out| (context, out))
                     .map_err(|err| Error::with_chain(err, "Error generating PDF"))
             })
         };
 
-        let output_path = {
-            let logger = logger.clone();
-            let temp_dir_path = temp_dir_path.clone();
-            let output_filename = output_filename.clone();
-            latex_out
-                .and_then(move |output| {
-                    let stdout = String::from_utf8(output.stdout).unwrap();
-                    if output.status.success() {
-                        debug!(logger, "{}", stdout);
-                        Ok(())
-                    } else {
-                        Err(ErrorKind::LatexFailed(stdout).into())
-                    }
-                })
-                .map(move |_| {
-                    // Construct the path to the generated PDF
-                    let mut path = temp_dir_path;
-                    path.push(Path::new(&output_filename));
-                    path
-                })
-        };
-
-        let s3_upload = {
-            let config = self.config.clone();
-            let logger = logger.clone();
-            let pool = pool.clone();
-            let key = format!("{}/{}", &s3_prefix, &output_filename);
-            output_path.and_then(move |path| {
-                pool.spawn_fn(move || {
-                    debug!(
-                        logger,
-                        "Uploading the rendered pdf as {:?} / {:?}",
-                        config.s3.bucket,
-                        key
-                    );
-                    post_to_s3(config, &path, key.clone())?;
-                    get_presigned_url(config, key)
-                })
+        let output_path = latex_out
+            .and_then(move |(context, output)| {
+                let stdout = String::from_utf8(output.stdout).unwrap();
+                if output.status.success() {
+                    debug!(context.logger, "{}", stdout);
+                    Ok(context)
+                } else {
+                    Err(ErrorKind::LatexFailed(stdout).into())
+                }
             })
-        };
+        .map(move |context| {
+            // Construct the path to the generated PDF
+            let mut path = context.tmp_dir.to_path_buf();
+            path.push(Path::new(&context.output_filename));
+            (context, path)
+        });
 
-        let callback_response = {
-            let callback_url = callback_url.clone();
-            let client = self.client.clone();
-            let config = self.config.clone();
-            let logger = logger.clone();
-            let s3_prefix = s3_prefix.clone();
-            s3_upload.and_then(move |presigned_url| {
-                report_success(
-                    config,
-                    logger,
-                    client,
-                    callback_url.0,
-                    s3_prefix,
-                    presigned_url,
-                )
-            })
-        };
+        let s3_upload = output_path.and_then(move |(context, path)| {
+            let key = format!("{}/{}", &context.s3_prefix, &context.output_filename);
+            upload_document(context.config, context.logger.clone(), context.pool.clone(), path, key)
+                .map(|presigned_url| (context, presigned_url))
+        });
+
+        let callback_client = client.clone();
+        let callback_response = s3_upload.and_then(move |(context, presigned_url)| {
+            report_success(
+                context.config,
+                context.logger,
+                callback_client,
+                context.callback_url.0,
+                context.s3_prefix,
+                presigned_url)
+        });
 
         // Report errors to the callback url
         let handle_errors = {
@@ -261,8 +251,6 @@ where
         let tarred_workspace_uploaded = {
             let config = self.config.clone();
             let key = format!("{}/{}", &s3_prefix, "workspace.tar");
-            let temp_dir_path = temp_dir_path.clone();
-            let logger = logger.clone();
             handle_errors
                 .then(move |_| {
                     pool.spawn_fn(move || upload_workspace(config, logger, temp_dir_path, key))
@@ -278,20 +266,21 @@ where
 /// Downloads all assets from the document spec in the workspace in parallel. It fails if any of
 /// those cannot be downloaded.
 fn download_assets<S>(
-    config: &'static Config,
-    logger: Logger,
-    temp_dir_path: PathBuf,
+    context: Context,
     client: S,
-    assets_urls: Vec<PapersUri>,
-) -> Box<Future<Item = Vec<()>, Error = Error>>
+) -> Box<Future<Item = (Context, Vec<()>), Error = Error>>
 where
     S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static + Clone,
 {
-    let max_asset_size = config.max_asset_size.clone();
-    debug!(logger, "Downloading assets {:?}", assets_urls);
+    let max_asset_size = context.config.max_asset_size.clone();
+    let assets_urls = context.assets_urls.clone();
+    let tmp_dir = context.tmp_dir.to_path_buf();
+    let logger = context.logger.clone();
+
+    debug!(context.logger, "Downloading assets {:?}", context.assets_urls);
     let futures = assets_urls.into_iter().map(move |uri| {
         let logger = logger.clone();
-        let mut path = temp_dir_path.to_path_buf();
+        let mut path = tmp_dir.to_path_buf();
         let client = client.clone();
 
         let response = client.get_follow_redirect(&uri.0);
@@ -301,6 +290,7 @@ where
             res.get_body_bytes_with_limit(max_asset_size)
                 .map(|bytes| (bytes, filename))
         });
+
         body.and_then(move |(bytes, filename)| {
             let filename = filename.or_else(|| extract_filename_from_uri(&uri.0));
             match filename {
@@ -315,5 +305,6 @@ where
             }
         })
     });
-    Box::new(future::join_all(futures))
+
+    Box::new(future::join_all(futures).map(|futs| (context, futs)))
 }

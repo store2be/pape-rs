@@ -125,16 +125,7 @@ pub fn merge_documents(config: &'static Config, handle: &Handle, spec: MergeSpec
         unwrapped.and_then(move |output_path| {
             let filename = output_path.file_name().unwrap().to_string_lossy().into_owned();
             let key = format!("{}/{}", &s3_prefix, filename);
-            pool.spawn_fn(move || {
-                debug!(
-                    logger,
-                    "Uploading the merged PDF as {:?} / {:?}",
-                    config.s3.bucket,
-                    key
-                );
-                post_to_s3(config, &output_path, key.clone())?;
-                get_presigned_url(config, key)
-            })
+            upload_document(config, logger, pool, output_path, key)
         })
     };
 

@@ -1,4 +1,6 @@
 use tar;
+use futures_cpupool::CpuPool;
+use futures::Future;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use chrono::Utc;
@@ -93,4 +95,18 @@ pub fn upload_workspace(
 
     // Upload the tarred workspace to S3
     post_to_s3(config, &tar_file_path, key)
+}
+
+/// Takes the path to a generated pdf and a key, returns the presigned url to the uploaded document
+pub fn upload_document(config: &'static Config, logger: Logger, pool: CpuPool, local_path: PathBuf, key: String) -> Box<Future<Item = String, Error = Error>> {
+    Box::new(pool.spawn_fn(move || {
+        debug!(
+            logger,
+            "Uploading to {:?} / {:?}",
+            config.s3.bucket,
+            key
+            );
+        post_to_s3(config, &local_path, key.clone())?;
+        get_presigned_url(config, key)
+    }))
 }
