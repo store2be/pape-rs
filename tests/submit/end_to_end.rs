@@ -12,6 +12,7 @@ use hyper::client::{Client, Request};
 use hyper::server;
 use hyper::header::ContentType;
 use futures::sync::mpsc;
+use toolbox;
 
 use papers::http::*;
 
@@ -44,7 +45,7 @@ impl server::Service for MockServer {
         let res = match req.path() {
             "/assets/logo.png" => server::Response::new().with_body(b"54321" as &[u8]),
             "/template" => {
-                std::thread::sleep(std::time::Duration::from_millis(20));
+                ::std::thread::sleep(::std::time::Duration::from_millis(20));
                 server::Response::new().with_body(TEMPLATE)
             }
             "/callback" => {
@@ -73,17 +74,19 @@ impl server::Service for MockServer {
     }
 }
 
-#[test]
-fn test_end_to_end() {
+pub fn test_end_to_end() {
     let (sender, receiver) = mpsc::channel(30);
 
-    let _join_mock = std::thread::spawn(|| {
-        papers::server::Server::new().with_port(8019).start();
+    let mock_port = toolbox::random_port();
+    let papers_port = toolbox::random_port();
+
+    let _join_papers = ::std::thread::spawn(move || {
+        papers::server::Server::new().with_port(papers_port as i32).start().unwrap();
     });
 
-    let _join_papers = std::thread::spawn(move || {
+    let _join_mock = ::std::thread::spawn(move || {
         hyper::server::Http::new()
-            .bind(&"127.0.0.1:8733".parse().unwrap(), move || {
+            .bind(&format!("127.0.0.1:{}", mock_port).parse().unwrap(), move || {
                 Ok(MockServer::new(sender.clone()))
             })
             .expect("could not bind")
@@ -91,25 +94,25 @@ fn test_end_to_end() {
             .expect("could not run");
     });
 
-    std::thread::sleep(std::time::Duration::from_millis(400));
+    ::std::thread::sleep(::std::time::Duration::from_millis(400));
 
     let mut core = tokio_core::reactor::Core::new().expect("could not create reactor");
 
     let handle = core.handle();
     let test_client = Client::new(&handle.clone());
 
-    let document_spec = r#"{
-        "assets_urls": ["http://127.0.0.1:8733/assets/logo.png"],
-        "template_url": "http://127.0.0.1:8733/template",
-        "callback_url": "http://127.0.0.1:8733/callback",
-        "variables": {
+    let document_spec = format!(r#"{{
+        "assets_urls": ["http://127.0.0.1:{port}/assets/logo.png"],
+        "template_url": "http://127.0.0.1:{port}/template",
+        "callback_url": "http://127.0.0.1:{port}/callback",
+        "variables": {{
             "who": "peter"
-        }
-    }"#;
+        }}
+    }}"#, port=mock_port);
 
     let request: Request<hyper::Body> = Request::new(
         hyper::Method::Post,
-        "http://127.0.0.1:8019/submit".parse().unwrap(),
+        format!("http://127.0.0.1:{}/submit", papers_port).parse().unwrap(),
     ).with_body(document_spec.into())
         .with_header(ContentType(mime::APPLICATION_JSON));
 

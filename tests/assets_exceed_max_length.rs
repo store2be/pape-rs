@@ -26,7 +26,8 @@ fn test_assets_exceed_max_length() {
         papers::server::Server::new()
             .with_port(8049)
             .with_config(&CONFIG)
-            .start();
+            .start()
+            .unwrap();
     });
 
     std::thread::sleep(std::time::Duration::from_millis(500));

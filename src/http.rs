@@ -5,56 +5,25 @@ use mime;
 use hyper;
 use hyper::client::HttpConnector;
 use hyper_tls::HttpsConnector;
-use hyper::server::{self, Service};
-use hyper::header::{ContentDisposition, ContentType, DispositionParam, Header, ContentLength};
+use hyper::server;
+use hyper::server::Service;
+use hyper::header::*;
 use hyper::{Request, Response};
 use hyper::header::Location;
 use hyper::{StatusCode, Uri};
 use tokio_core::reactor::Handle;
+use std::path::Path;
+use std::fs::File;
+use std::io::prelude::*;
 
 pub fn https_connector(handle: &Handle) -> HttpsConnector<HttpConnector> {
     HttpsConnector::new(4, handle).expect("Could not create an https connector")
 }
 
-pub trait ServerResponseExt {
-    fn with_body<T: Into<hyper::Body>>(self, body: T) -> Self;
-}
-
-impl ServerResponseExt for server::Response {
-    fn with_body<T: Into<hyper::Body>>(self, body: T) -> Self {
-        let mut res = self;
-        res.set_body(body.into());
-        res
-    }
-}
-
-pub trait ServerRequestExt {
-    fn get_body_bytes(self) -> Box<Future<Item = Vec<u8>, Error = Error>>;
-    fn has_content_type(&self, mime: mime::Mime) -> bool;
-}
-
-impl ServerRequestExt for server::Request {
-    fn get_body_bytes(self) -> Box<Future<Item = Vec<u8>, Error = Error>> {
-        Box::new(self.body().map_err(Error::from).fold(
-            Vec::new(),
-            |mut acc, chunk| {
-                acc.extend_from_slice(&chunk);
-                future::ok::<_, Error>(acc)
-            },
-        ))
-    }
-
-    fn has_content_type(&self, mime: mime::Mime) -> bool {
-        let content_type = self.headers().get::<ContentType>().cloned();
-        if let Some(content_type) = content_type {
-            content_type.type_() == mime.type_() && content_type.subtype() == mime.subtype()
-        } else {
-            false
-        }
-    }
-}
-
 pub trait ResponseExt {
+    fn with_body<T: Into<hyper::Body>>(self, body: T) -> Self;
+    fn with_file_unsafe(self, path: &Path) -> Self;
+    fn with_header<T: Header>(self, header: T) -> Self;
     fn filename(&self) -> Option<String>;
     fn get_body_bytes(self) -> Box<Future<Item = Vec<u8>, Error = Error>>;
     /// Try to populate a vector with the contents of the response body, but stop after `limit`
@@ -63,6 +32,35 @@ pub trait ResponseExt {
 }
 
 impl ResponseExt for Response {
+    fn with_body<T: Into<hyper::Body>>(self, body: T) -> Self {
+        let mut res = self;
+        res.set_body(body.into());
+        res
+    }
+
+    fn with_file_unsafe(self, path: &Path) -> Self {
+        let mut body: Vec<u8> = Vec::new();
+        let filename = path.file_name().unwrap().to_string_lossy().into_owned().into_bytes();
+        let mut file = File::open(&path).expect(&format!("could not open file {:?}", &path));
+        file.read_to_end(&mut body).expect(&format!("could not read file {:?}", &path));
+        self
+            .with_body(body)
+            .with_header(ContentDisposition {
+                disposition: DispositionType::Attachment,
+                parameters: vec![
+                    DispositionParam::Filename(Charset::Ext("utf-8".to_string()), None, filename)
+                ],
+            })
+        }
+
+    fn with_header<T: Header>(mut self, header: T) -> Self {
+        {
+            let mut h = self.headers_mut();
+            h.set(header);
+        }
+        self
+    }
+
     fn get_body_bytes_with_limit(self, limit: u32) -> Box<Future<Item = Vec<u8>, Error = Error>> {
         Box::new(self.body().from_err().fold(
             Vec::<u8>::new(),
@@ -112,12 +110,32 @@ impl ResponseExt for Response {
 }
 
 pub trait RequestExt {
+    fn get_body_bytes(self) -> Box<Future<Item = Vec<u8>, Error = Error>>;
+    fn has_content_type(&self, mime: mime::Mime) -> bool;
     fn with_header<T: Header>(self, header: T) -> Self;
-
     fn with_body(self, body: Vec<u8>) -> Self;
 }
 
 impl RequestExt for Request {
+    fn get_body_bytes(self) -> Box<Future<Item = Vec<u8>, Error = Error>> {
+        Box::new(self.body().map_err(Error::from).fold(
+            Vec::new(),
+            |mut acc, chunk| {
+                acc.extend_from_slice(&chunk);
+                future::ok::<_, Error>(acc)
+            },
+        ))
+    }
+
+    fn has_content_type(&self, mime: mime::Mime) -> bool {
+        let content_type = self.headers().get::<ContentType>().cloned();
+        if let Some(content_type) = content_type {
+            content_type.type_() == mime.type_() && content_type.subtype() == mime.subtype()
+        } else {
+            false
+        }
+    }
+
     fn with_header<T: Header>(mut self, header: T) -> Self {
         {
             let mut h = self.headers_mut();
@@ -172,6 +190,36 @@ fn determine_get_result(res: Response) -> Result<GetResult> {
             }
         }
         _ => Ok(GetResult::Ok(res)),
+    }
+}
+
+pub fn extract_filename_from_uri(uri: &Uri) -> Option<String> {
+    match uri.path().split('/').last() {
+        Some(name) if !name.is_empty() => Some(name.to_string()),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod extract_filename_tests {
+    use hyper::Uri;
+    use super::extract_filename_from_uri;
+
+    #[test]
+    fn test_extract_filename_from_uri_works() {
+        let assert_extracted = |input: &'static str, expected_output: Option<&'static str>| {
+            let uri = input.parse::<Uri>().unwrap();
+            assert_eq!(
+                extract_filename_from_uri(&uri),
+                expected_output.map(|o| o.to_string())
+            );
+        };
+
+        assert_extracted("/logo.png", Some("logo.png"));
+        assert_extracted("/assets/", None);
+        assert_extracted("/assets/icon", Some("icon"));
+        assert_extracted("/", None);
+        assert_extracted("http://www.store2be.com", None);
     }
 }
 

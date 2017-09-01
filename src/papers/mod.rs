@@ -1,5 +1,8 @@
 mod document_spec;
+mod merge;
+mod merge_spec;
 mod summary;
+mod uri;
 
 use mime;
 use futures::future::{err, ok, result, Future};
@@ -17,7 +20,10 @@ use tokio_core::reactor::{Handle, Remote};
 
 use http::*;
 use error::{Error, ErrorKind};
-pub use self::document_spec::{DocumentSpec, PapersUri};
+pub use self::document_spec::DocumentSpec;
+pub use self::merge_spec::MergeSpec;
+use self::merge::merge_documents;
+pub use self::uri::PapersUri;
 pub use self::summary::Summary;
 use renderer::Renderer;
 use config::Config;
@@ -179,6 +185,44 @@ where
 
     }
 
+    fn merge(&self, req: Request) -> Box<Future<Item = Response, Error = Error>> {
+        debug!(self.config.logger, "Merge request: {:#?}", req);
+
+        if let Err(error) = self.check_auth_header(&req) {
+            return Box::new(err(error));
+        }
+
+        if !req.has_content_type(mime::APPLICATION_JSON) {
+            return Box::new(err(ErrorKind::UnprocessableEntity.into()));
+        }
+
+        let body = req.get_body_bytes();
+        let merge_spec = body.and_then(|body| {
+            result(
+                serde_json::from_slice::<MergeSpec>(body.as_slice())
+                    .map_err(|err| Error::with_chain(err, ErrorKind::UnprocessableEntity)),
+            )
+        });
+
+        let work = {
+            let remote = self.remote.clone();
+            let config = self.config;
+            merge_spec
+                .and_then(move |merge_spec| {
+                    remote.spawn(move |handle| {
+                        merge_documents(config, &handle, merge_spec)
+                    });
+                    Ok(())
+                })
+        };
+
+        let response = work.and_then(|_| {
+            ok(Response::new())
+        });
+
+        Box::new(response)
+    }
+
     fn health_check(&self, _: Request) -> Box<Future<Item = Response, Error = Error>> {
         Box::new(ok(Response::new().with_status(StatusCode::Ok)))
     }
@@ -199,6 +243,7 @@ where
             (&Get, "/healthz") | (&Head, "/healthz") => self.health_check(req),
             (&Post, "/preview") => self.preview(req),
             (&Post, "/submit") => self.submit(req),
+            (&Post, "/merge") => self.merge(req),
             _ => Box::new(ok(Response::new().with_status(StatusCode::NotFound))),
         }.then(|handler_result| match handler_result {
             Ok(response) => ok(response),

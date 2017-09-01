@@ -1,6 +1,6 @@
 [package]
 name = "papers"
-version = "0.2.2"
+version = "0.2.3"
 authors = [
     "Peter Gundel <peter.gundel@store2be.com",
     "Fausto Núñez Alberro <fausto.nunez@store2be.com>",
@@ -25,6 +25,7 @@ serde = "^1.0"
 serde_derive = "^1.0"
 serde_json = "^1.0"
 sloggers = "^0.2"
+rand = "*"
 rusoto_core = { git = "https://github.com/store2be/rusoto", branch = "presigned-url" }
 rusoto_s3 = { git = "https://github.com/store2be/rusoto", branch = "presigned-url" }
 tar = "*"
