@@ -2,20 +2,24 @@ FROM debian:jessie-slim
 
 WORKDIR /papers
 
+# poppler-utils: pdfunite
+# imagemagick: convert
 RUN apt-get update -y && apt-get install -y \
     wget \
     libpod-pom-perl \
     fontconfig \
     fonts-lmodern \
+    poppler-utils \
+    imagemagick \
     && rm -rf /var/lib/apt
 
 # Install a small version of TeXLive with the profile from texlive.profile
-RUN echo '66b713fb67bfde16e38a27ed0e798856  install-tl-unx.tar.gz' > texlive.md5
+RUN echo '483c56df371bd35780f48e4ba8e265ff  install-tl-unx.tar.gz\n' > texlive.md5
 RUN wget 'http://mirror.ctan.org/systems/texlive/tlnet/install-tl-unx.tar.gz'
 RUN md5sum -c texlive.md5
 RUN tar xzf install-tl-unx.tar.gz
 COPY docker/texlive.profile texlive.profile
-RUN ./install-tl-20170817/install-tl -profile=texlive.profile
+RUN ./install-tl-20170905/install-tl -profile=texlive.profile
 
 RUN apt-get update -y && \
     apt-get install -y curl libssl-dev libssl1.0.0 openssl && \
