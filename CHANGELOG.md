@@ -4,6 +4,8 @@
 (critical comment about semver: https://gist.github.com/jashkenas/cbd2b088e20279ae2c8e)
 
 ## Unreleased
+* Make papers-local exit with same code as the latex process
+
 
 ## [0.2.3] - 2017-08-31
 * Add a `/merge` endpoint that takes a MergeSpec and merges documents into a
@@ -19,9 +21,9 @@
   some HTTP servers, including Puma (Rails).
 
 ## [0.2.1] - 2017-08-18
-* 🐛  Actually upload the workspace.tar
-* 🐛  Set the Content-Type header when posting to callback url
-* 🐛  Fix terminal output in k8s
+* Actually upload the workspace.tar
+* Set the Content-Type header when posting to callback url
+* Fix terminal output in k8s
 
 ## [0.2.0] - 2017-08-17
 * Major change in the interface of the service. Papers now uploads the rendered
