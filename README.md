@@ -2,6 +2,10 @@
 
 ![Papers Logo](logo.png)
 
+[![Build Status](https://travis-ci.org/store2be/pape-rs.svg?branch=master)](https://travis-ci.org/store2be/pape-rs)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/store2be/redux-belt/blob/master/CONTRIBUTING.md)
+[![license](https://img.shields.io/github/license/mashape/apistatus.svg?maxAge=2592000)](https://github.com/store2be/pape-rs/blob/master/LICENSE)
+
 A Latex template to PDF generation web service written in Rust. Papers is available as a docker image on [Docker Hub](https://hub.docker.com/r/store2be/pape-rs/). It relies on an installation of [xelatex](https://en.wikipedia.org/wiki/XeTeX).
 
 **Papers uses semantic versioning. So until 1.0.0 is reached expect many breaking changes.**
