@@ -6,6 +6,8 @@
 ## Unreleased
 * Make papers-local exit with same code as the latex process
 * Send better error messages to callback endpoint
+* Implement LaTeX escaping
+
 
 ## [0.2.3] - 2017-08-31
 * Add a `/merge` endpoint that takes a MergeSpec and merges documents into a

@@ -15,7 +15,11 @@ pub struct DocumentSpec {
     pub template_url: PapersUri,
     #[serde(default = "default_value")]
     pub variables: json::Value,
+    #[serde(default = "return_false")]
+    pub no_escape_latex: bool,
 }
+
+fn return_false() -> bool { false }
 
 fn default_assets() -> Vec<PapersUri> {
     Vec::new()

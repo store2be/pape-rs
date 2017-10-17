@@ -57,6 +57,8 @@ Example body:
 * `asset_urls`: An array of asset URLs that are used in the Latex template. They are downloaded next to the Latex document.
 * `variables`: The variables that are used in the Latex template.
 * `callback_url`: The URL that the final PDF or the error will be sent to.
+* `no_escape_latex`: (Optional) Disable escaping strings from `variables` for
+  LaTeX special characters like `&`, `%` and `$`.
 
 
 ### POST /preview
