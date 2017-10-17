@@ -5,8 +5,7 @@ use mime;
 use hyper;
 use hyper::client::HttpConnector;
 use hyper_tls::HttpsConnector;
-use hyper::server;
-use hyper::server::Service;
+use hyper::server::{self, Service};
 use hyper::header::*;
 use hyper::{Request, Response};
 use hyper::header::Location;
@@ -55,7 +54,7 @@ impl ResponseExt for Response {
 
     fn with_header<T: Header>(mut self, header: T) -> Self {
         {
-            let mut h = self.headers_mut();
+            let h = self.headers_mut();
             h.set(header);
         }
         self
@@ -138,7 +137,7 @@ impl RequestExt for Request {
 
     fn with_header<T: Header>(mut self, header: T) -> Self {
         {
-            let mut h = self.headers_mut();
+            let h = self.headers_mut();
             h.set(header);
         }
         self

@@ -136,8 +136,9 @@ pub fn test_end_to_end() {
 
     let expectations = receiver
         .take(expected_requests.len() as u64)
-        .zip(futures::stream::iter(expected_requests))
+        .zip(futures::stream::iter_ok(expected_requests))
         .for_each(|(request, schema)| {
+            let schema = schema.unwrap();
             assert_eq!(request.path(), schema.0);
             assert_eq!(request.method(), &schema.1);
             future::ok(())

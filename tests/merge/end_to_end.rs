@@ -120,9 +120,9 @@ pub fn test_end_to_end() {
 
     let expectations = receiver
         .take(expected_messages.len() as u64)
-        .zip(futures::stream::iter(expected_messages))
+        .zip(futures::stream::iter_ok(expected_messages))
         .for_each(|(message, expected)| {
-            assert_eq!(message, expected);
+            assert_eq!(Ok(message), expected);
             ok(())
         });
 
