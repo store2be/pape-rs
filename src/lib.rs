@@ -40,6 +40,7 @@ pub mod config;
 pub mod error;
 pub mod http;
 mod human_size;
+mod latex;
 pub mod papers;
 pub mod renderer;
 mod utils;
