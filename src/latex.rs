@@ -1,22 +1,46 @@
 use serde_json::Value;
 use regex::Regex;
 
+pub fn unescape_tex_string(string: &str) -> String {
+    lazy_static! {
+        static ref ESCAPED_TEX_SPECIAL_CHARACTER: Regex = Regex::new(r"\\([&%$#_{}])").unwrap();
+    }
+    ESCAPED_TEX_SPECIAL_CHARACTER
+        .replace_all(string, "$1")
+        .to_string()
+}
+
 pub fn escape_tex_string(string: &str) -> String {
     lazy_static! {
-        static ref LATEX_SPECIAL_CHARACTER: Regex = Regex::new(r"([&%$#_{}])").unwrap();
+        static ref TEX_SPECIAL_CHARACTER: Regex = Regex::new(r"([&%$#_{}])").unwrap();
     }
-    LATEX_SPECIAL_CHARACTER
+    TEX_SPECIAL_CHARACTER
         .replace_all(string, "\\$1")
         .to_string()
 }
 
+pub fn unescape_tex(json: Value) -> Value {
+    transform_strings(json, &unescape_tex_string)
+}
+
 pub fn escape_tex(json: Value) -> Value {
+    transform_strings(json, &escape_tex_string)
+}
+
+fn transform_strings(json: Value, callback: &Fn(&str) -> String) -> Value {
     match json {
-        Value::String(s) => Value::String(escape_tex_string(&s)),
-        Value::Object(obj) => {
-            Value::Object(obj.into_iter().map(|(k, v)| (k, escape_tex(v))).collect())
-        }
-        Value::Array(values) => Value::Array(values.into_iter().map(escape_tex).collect()),
+        Value::String(s) => Value::String(callback(&s)),
+        Value::Object(obj) => Value::Object(
+            obj.into_iter()
+                .map(|(k, v)| (k, transform_strings(v, callback)))
+                .collect(),
+        ),
+        Value::Array(values) => Value::Array(
+            values
+                .into_iter()
+                .map(|v| transform_strings(v, callback))
+                .collect(),
+        ),
         other => other,
     }
 }
