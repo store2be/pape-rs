@@ -6,14 +6,12 @@ pub fn escape_latex(json: Value) -> Value {
         static ref LATEX_SPECIAL_CHARACTER: Regex = Regex::new(r"([&%$#_{}])").unwrap();
     }
     match json {
-        Value::String(s) => Value::String(
-            LATEX_SPECIAL_CHARACTER
-                .replace_all(&s, "\\$1")
-                .to_string()
-        ),
+        Value::String(s) => {
+            Value::String(LATEX_SPECIAL_CHARACTER.replace_all(&s, "\\$1").to_string())
+        }
         Value::Object(obj) => {
             Value::Object(obj.into_iter().map(|(k, v)| (k, escape_latex(v))).collect())
-        },
+        }
         Value::Array(values) => Value::Array(values.into_iter().map(escape_latex).collect()),
         other => other,
     }
@@ -48,11 +46,13 @@ mod tests {
     fn escape_latex_escapes_latex_special_characters() {
         let original = json!(
             r##"## Ye$sterday,
-            I ate 30% discounted M&M's 90% of the time, & it was {{ _sweet_ }} as hell ##"##
+            I ate 30% discounted M&M's 90% of the time, & it was {{ _sweet_ }} as hell
+            ##"##
         );
         let expected = json!(
             r##"\#\# Ye\$sterday,
-            I ate 30\% discounted M\&M's 90\% of the time, \& it was \{\{ \_sweet\_ \}\} as hell \#\#"##
+            I ate 30\% discounted M\&M's 90\% of the time, \& it was \{\{ \_sweet\_ \}\} as hell
+            \#\#"##
         );
         assert_eq!(escape_latex(original), expected);
     }

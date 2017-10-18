@@ -39,18 +39,21 @@ impl ResponseExt for Response {
 
     fn with_file_unsafe(self, path: &Path) -> Self {
         let mut body: Vec<u8> = Vec::new();
-        let filename = path.file_name().unwrap().to_string_lossy().into_owned().into_bytes();
+        let filename = path.file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned()
+            .into_bytes();
         let mut file = File::open(&path).expect(&format!("could not open file {:?}", &path));
-        file.read_to_end(&mut body).expect(&format!("could not read file {:?}", &path));
-        self
-            .with_body(body)
-            .with_header(ContentDisposition {
-                disposition: DispositionType::Attachment,
-                parameters: vec![
-                    DispositionParam::Filename(Charset::Ext("utf-8".to_string()), None, filename)
-                ],
-            })
-        }
+        file.read_to_end(&mut body)
+            .expect(&format!("could not read file {:?}", &path));
+        self.with_body(body).with_header(ContentDisposition {
+            disposition: DispositionType::Attachment,
+            parameters: vec![
+                DispositionParam::Filename(Charset::Ext("utf-8".to_string()), None, filename),
+            ],
+        })
+    }
 
     fn with_header<T: Header>(mut self, header: T) -> Self {
         {
@@ -64,7 +67,6 @@ impl ResponseExt for Response {
         Box::new(self.body().from_err().fold(
             Vec::<u8>::new(),
             move |mut acc, chunk| {
-
                 if (acc.len() + chunk.len()) > limit as usize {
                     return future::err(ErrorKind::UnprocessableEntity.into());
                 }

@@ -28,13 +28,21 @@ use utils::logging::file_logger;
 /// - Reports to the `callback_url` from the `MergeSpec` with the error or presigned url of the
 ///   generated document.
 /// - Uploads the debugging output to S3 as a tar file.
-pub fn merge_documents(config: &'static Config, handle: &Handle, spec: MergeSpec) -> Box<Future<Item = (), Error = ()>> {
+pub fn merge_documents(
+    config: &'static Config,
+    handle: &Handle,
+    spec: MergeSpec,
+) -> Box<Future<Item = (), Error = ()>> {
     let pool = CpuPool::new(3);
     let temp_dir = Temp::new_dir().expect("Could not create a temporary directory");
     let max_asset_size = config.max_asset_size.clone();
     let logger = file_logger(config.logger.clone(), temp_dir.as_ref());
     let s3_prefix = s3_dir_name();
-    debug!(logger, "Downloading PDFs for merging: {:?}", &spec.assets_urls);
+    debug!(
+        logger,
+        "Downloading PDFs for merging: {:?}",
+        &spec.assets_urls
+    );
 
     let client = Client::configure()
         .connector(https_connector(handle))
@@ -50,23 +58,25 @@ pub fn merge_documents(config: &'static Config, handle: &Handle, spec: MergeSpec
             .map(move |(index, uri)| {
                 let mut path = temp_dir.to_path_buf();
                 let logger = logger.clone();
-                client.clone().get_follow_redirect(&uri.0)
+                client
+                    .clone()
+                    .get_follow_redirect(&uri.0)
                     .and_then(move |res| {
                         let filename = res.filename();
                         res.get_body_bytes_with_limit(max_asset_size)
                             .map(|bytes| (bytes, filename))
                     })
-                .and_then(move |(bytes, filename)| {
-                    let filename = filename
-                        .or_else(|| extract_filename_from_uri(&uri.0))
-                        .unwrap_or_else(|| format!("{}.pdf", index));
-                    path.push(filename);
-                    debug!(logger, "Writing file {:?} as {:?}", &uri, &path);
-                    ::std::fs::File::create(&path)
-                        .and_then(|mut file| file.write_all(&bytes))
-                        .map(|_| path)
-                        .map_err(|e| Error::with_chain(e, "Error writing PDF"))
-                })
+                    .and_then(move |(bytes, filename)| {
+                        let filename = filename
+                            .or_else(|| extract_filename_from_uri(&uri.0))
+                            .unwrap_or_else(|| format!("{}.pdf", index));
+                        path.push(filename);
+                        debug!(logger, "Writing file {:?} as {:?}", &uri, &path);
+                        ::std::fs::File::create(&path)
+                            .and_then(|mut file| file.write_all(&bytes))
+                            .map(|_| path)
+                            .map_err(|e| Error::with_chain(e, "Error writing PDF"))
+                    })
             })
     };
 
@@ -123,7 +133,11 @@ pub fn merge_documents(config: &'static Config, handle: &Handle, spec: MergeSpec
         let s3_prefix = s3_prefix.clone();
         let pool = pool.clone();
         unwrapped.and_then(move |output_path| {
-            let filename = output_path.file_name().unwrap().to_string_lossy().into_owned();
+            let filename = output_path
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned();
             let key = format!("{}/{}", &s3_prefix, filename);
             upload_document(config, logger, pool, output_path, key)
         })
@@ -141,7 +155,7 @@ pub fn merge_documents(config: &'static Config, handle: &Handle, spec: MergeSpec
                 client,
                 callback_url.0,
                 s3_prefix,
-                presigned_url
+                presigned_url,
             )
         })
     };
@@ -166,7 +180,9 @@ pub fn merge_documents(config: &'static Config, handle: &Handle, spec: MergeSpec
             .then(move |_| {
                 pool.spawn_fn(move || upload_workspace(config, logger, temp_dir_path, key))
             })
-        .map_err(move |_| { let _hold = temp_dir; })
+            .map_err(move |_| {
+                let _hold = temp_dir;
+            })
     };
 
 
@@ -178,8 +194,13 @@ pub fn merge_documents(config: &'static Config, handle: &Handle, spec: MergeSpec
 /// Sample command:
 ///
 /// `convert sc.png -resize 1190x1684 -gravity center -background white -extent 1190x1684 sc.pdf`
-fn image_to_pdf(logger: Logger, handle: &Handle, original_file_path: &Path) -> Box<Future<Item=PathBuf,Error=Error>> {
-    let stem = original_file_path.file_stem().expect("Invalid path"); // "/tmp/something.jpeg" -> "something"
+fn image_to_pdf(
+    logger: Logger,
+    handle: &Handle,
+    original_file_path: &Path,
+) -> Box<Future<Item = PathBuf, Error = Error>> {
+    // "/tmp/something.jpeg" -> "something"
+    let stem = original_file_path.file_stem().expect("Invalid path");
     let final_path = original_file_path.with_file_name(format!("{}.pdf", stem.to_string_lossy()));
     let work = Command::new("convert")
         .current_dir(&original_file_path.parent().expect("Invalid path"))
@@ -196,7 +217,9 @@ fn image_to_pdf(logger: Logger, handle: &Handle, original_file_path: &Path) -> B
         .arg("A4")
         .arg(&final_path)
         .output_async(handle)
-        .map_err(|err| Error::with_chain(err, "Error while converting image to pdf"))
+        .map_err(|err| {
+            Error::with_chain(err, "Error while converting image to pdf")
+        })
         .and_then(move |output| {
             let stdout = String::from_utf8(output.stdout).unwrap();
             if output.status.success() {

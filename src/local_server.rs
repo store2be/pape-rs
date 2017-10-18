@@ -5,9 +5,9 @@
 extern crate lazy_static;
 extern crate papers;
 extern crate regex;
-extern crate tera;
 #[macro_use]
 extern crate serde_json;
+extern crate tera;
 
 mod latex;
 

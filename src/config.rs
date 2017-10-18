@@ -80,9 +80,8 @@ impl Config {
 
         let max_assets_per_document = max_assets_per_document(&logger);
 
-        let aws_region_string = ::std::env::var("PAPERS_AWS_REGION").expect(
-            "The PAPERS_AWS_REGION environment variable was not provided",
-        );
+        let aws_region_string = ::std::env::var("PAPERS_AWS_REGION")
+            .expect("The PAPERS_AWS_REGION environment variable was not provided");
 
         let expiration_time: u32 = ::std::env::var("PAPERS_S3_EXPIRATION_TIME")
             .unwrap_or_else(|_| "86400".to_string()) // one day
@@ -92,12 +91,10 @@ impl Config {
         let s3 = S3Config {
             bucket: ::std::env::var("PAPERS_S3_BUCKET")
                 .expect("The PAPERS_S3_BUCKET environment variable was not provided"),
-            access_key: ::std::env::var("PAPERS_AWS_ACCESS_KEY").expect(
-                "The PAPERS_AWS_ACCESS_KEY environment variable was not provided",
-            ),
-            secret_key: ::std::env::var("PAPERS_AWS_SECRET_KEY").expect(
-                "The PAPERS_AWS_SECRET_KEY environment variable was not provided",
-            ),
+            access_key: ::std::env::var("PAPERS_AWS_ACCESS_KEY")
+                .expect("The PAPERS_AWS_ACCESS_KEY environment variable was not provided"),
+            secret_key: ::std::env::var("PAPERS_AWS_SECRET_KEY")
+                .expect("The PAPERS_AWS_SECRET_KEY environment variable was not provided"),
             region: aws_region_string
                 .parse()
                 .expect("The provided AWS region is not valid"),

@@ -43,29 +43,36 @@ impl server::Service for MockServer {
                 println!("logo.png endpoint was called");
                 let res = Response::new().with_file_unsafe(Path::new("tests/assets/logo.png"));
                 Box::new(ok(res))
-            },
+            }
             "/doc.pdf" => {
                 println!("doc.pdf endpoint was called");
                 let res = Response::new().with_file_unsafe(Path::new("tests/assets/doc.pdf"));
                 Box::new(ok(res))
-            },
+            }
             "/callback" => {
                 let sender = self.sender.clone();
                 let res = req.get_body_bytes()
-                    .and_then(|bytes| ok(json::from_slice::<Summary>(&bytes).expect("could not read summary")))
+                    .and_then(|bytes| {
+                        ok(json::from_slice::<Summary>(&bytes).expect("could not read summary"))
+                    })
                     .map(|summary| {
                         if let Summary::Error { error: err, .. } = summary {
                             panic!("Error reported to callback endpoint: {}", err);
                         }
                         summary
-                    }).and_then(move |_| {
-                        sender.send("callback ok").map_err(|_| ErrorKind::InternalServerError.into())
-                    }).and_then(|_| {
+                    })
+                    .and_then(move |_| {
+                        sender
+                            .send("callback ok")
+                            .map_err(|_| ErrorKind::InternalServerError.into())
+                    })
+                    .and_then(|_| {
                         println!("Sending back response from callback endpoint");
                         ok(server::Response::new())
-                    }).map_err(|_| hyper::Error::Incomplete);
+                    })
+                    .map_err(|_| hyper::Error::Incomplete);
                 Box::new(res)
-            },
+            }
             other => panic!("Unexpected request to {}", other),
         }
     }
@@ -79,15 +86,18 @@ pub fn test_end_to_end() {
     let papers_port = toolbox::random_port();
 
     let mut join_papers = pool.spawn_fn(move || {
-        papers::server::Server::new().with_port(papers_port as i32).start()
+        papers::server::Server::new()
+            .with_port(papers_port as i32)
+            .start()
     });
 
     let mut join_mock = pool.spawn_fn(move || {
         println!("Starting mock server on port {}", mock_port);
         hyper::server::Http::new()
-            .bind(&format!("127.0.0.1:{}", mock_port).parse().unwrap(), move || {
-                Ok(MockServer::new(sender.clone()))
-            })
+            .bind(
+                &format!("127.0.0.1:{}", mock_port).parse().unwrap(),
+                move || Ok(MockServer::new(sender.clone())),
+            )
             .expect("could not bind")
             .run()
     });
@@ -99,24 +109,26 @@ pub fn test_end_to_end() {
     let handle = core.handle();
     let test_client = Client::new(&handle.clone());
 
-    let merge_spec = format!(r#"{{
+    let merge_spec = format!(
+        r#"{{
         "assets_urls": ["http://127.0.0.1:{port}/logo.png", "http://127.0.0.1:{port}/doc.pdf"],
         "callback_url": "http://127.0.0.1:{port}/callback"
-    }}"#, port=mock_port);
+    }}"#,
+        port = mock_port
+    );
 
     let request: Request<hyper::Body> = Request::new(
         hyper::Method::Post,
-        format!("http://127.0.0.1:{}/merge", papers_port).parse().unwrap(),
+        format!("http://127.0.0.1:{}/merge", papers_port)
+            .parse()
+            .unwrap(),
     ).with_body(merge_spec.into())
         .with_header(ContentType(mime::APPLICATION_JSON));
 
     let test = test_client.request(request);
 
-    let expected_messages: Vec<Result<Message, ()>> = vec![
-        "callback ok",
-    ].into_iter()
-        .map(Ok)
-        .collect();
+    let expected_messages: Vec<Result<Message, ()>> =
+        vec!["callback ok"].into_iter().map(Ok).collect();
 
     let expectations = receiver
         .take(expected_messages.len() as u64)

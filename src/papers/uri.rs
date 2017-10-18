@@ -1,10 +1,7 @@
 use hyper::Uri;
 
 #[derive(Clone, Deserialize, Serialize, Debug)]
-pub struct PapersUri(
-    #[serde(with = "uri_deserializer")]
-    pub Uri,
-);
+pub struct PapersUri(#[serde(with = "uri_deserializer")] pub Uri);
 
 mod uri_deserializer {
     use hyper::Uri;

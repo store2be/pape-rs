@@ -1,7 +1,7 @@
 extern crate futures;
 extern crate hyper;
-extern crate tokio_core;
 extern crate papers;
+extern crate tokio_core;
 
 #[macro_use]
 extern crate lazy_static;
