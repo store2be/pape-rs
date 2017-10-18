@@ -213,6 +213,8 @@ fn image_to_pdf(
         .arg("white")
         .arg("-extent")
         .arg("595x842")
+        .arg("-density")
+        .arg("72")
         .arg("-page")
         .arg("A4")
         .arg(&final_path)
