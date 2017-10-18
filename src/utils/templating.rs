@@ -12,3 +12,42 @@ pub fn make_tera() -> Tera {
     tera.register_filter("escape_tex", escape_tex_filter);
     tera
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn make_tera_surfaces_working_escape_filter() {
+
+        static TEMPLATE: &'static str = r"
+        \documentclass{article}
+
+        \begin{document}
+        {{escape_me | escape_tex}}
+        {{do_not_escape}}
+        \end{document}
+        ";
+
+        static EXPECTED_TEMPLATE_RESULT: &'static str = r"
+        \documentclass{article}
+
+        \begin{document}
+        Brothers \& Sisters 100\% 0.50\$ Ernst is numero \#1 rust\_convention \{or not\}
+        % you shall not compile %
+        \end{document}
+        ";
+
+        let mut tera = make_tera();
+        let variables = json!({
+            "escape_me": "Brothers & Sisters 100% 0.50$ Ernst is numero #1 rust_convention {or not}",
+            "do_not_escape": "% you shall not compile %",
+        });
+        tera.add_raw_template("template", TEMPLATE)
+            .expect("failed to add raw template");
+        let rendered_template = tera.render("template", &variables)
+            .expect("failed to render the template");
+        assert_eq!(rendered_template, EXPECTED_TEMPLATE_RESULT);
+    }
+}
+
