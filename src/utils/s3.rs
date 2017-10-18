@@ -66,8 +66,8 @@ pub fn get_presigned_url(config: &'static Config, key: String) -> Result<String,
 /// temporary directory where we generated the PDF) to S3 under the given key.
 pub fn upload_workspace(
     config: &'static Config,
-    logger: Logger,
-    workspace: PathBuf,
+    logger: &Logger,
+    workspace: &PathBuf,
     key: String,
 ) -> Result<(), Error> {
     debug!(logger, "Tarring {:?}", workspace);
@@ -101,7 +101,7 @@ pub fn upload_workspace(
 pub fn upload_document(
     config: &'static Config,
     logger: Logger,
-    pool: CpuPool,
+    pool: &CpuPool,
     local_path: PathBuf,
     key: String,
 ) -> Box<Future<Item = String, Error = Error>> {

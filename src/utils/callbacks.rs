@@ -17,7 +17,7 @@ use config::Config;
 /// location of the debugging output. It returns the response from the callback url as a future.
 pub fn report_success<S>(
     config: &'static Config,
-    logger: Logger,
+    logger: &Logger,
     client: S,
     callback_url: Uri,
     s3_prefix: String,
@@ -49,7 +49,7 @@ where
 
     let response_bytes = {
         let logger = logger.clone();
-        let max_asset_size = config.max_asset_size.clone();
+        let max_asset_size = config.max_asset_size;
         callback_response.and_then(move |response| {
             info!(
                 logger,
@@ -78,9 +78,9 @@ where
 /// the `callback_url` from the document spec, posting a `Summary` object with the error and the
 /// key where the debug output can be found.
 pub fn report_failure<S>(
-    logger: Logger,
+    logger: &Logger,
     client: S,
-    error: Error,
+    error: &Error,
     s3_prefix: String,
     callback_url: Uri,
 ) -> Box<Future<Item = (), Error = Error>>

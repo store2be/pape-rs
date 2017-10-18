@@ -81,7 +81,7 @@ pub fn test_end_to_end() {
 
     let _join_papers = ::std::thread::spawn(move || {
         papers::server::Server::new()
-            .with_port(papers_port as i32)
+            .with_port(i32::from(papers_port))
             .start()
             .unwrap();
     });

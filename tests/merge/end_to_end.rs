@@ -87,7 +87,7 @@ pub fn test_end_to_end() {
 
     let mut join_papers = pool.spawn_fn(move || {
         papers::server::Server::new()
-            .with_port(papers_port as i32)
+            .with_port(i32::from(papers_port))
             .start()
     });
 
