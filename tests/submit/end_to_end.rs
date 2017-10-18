@@ -1,10 +1,10 @@
 extern crate futures;
-extern crate mime;
 extern crate hyper;
-extern crate slog;
-extern crate tokio_core;
+extern crate mime;
 extern crate papers;
 extern crate serde_json as json;
+extern crate slog;
+extern crate tokio_core;
 
 use futures::future;
 use futures::{Future, Sink, Stream};
@@ -62,7 +62,6 @@ impl server::Service for MockServer {
                 server::Response::new()
             }
             _ => server::Response::new().with_status(hyper::StatusCode::NotFound),
-
         };
         Box::new(
             self.sender
@@ -81,14 +80,18 @@ pub fn test_end_to_end() {
     let papers_port = toolbox::random_port();
 
     let _join_papers = ::std::thread::spawn(move || {
-        papers::server::Server::new().with_port(papers_port as i32).start().unwrap();
+        papers::server::Server::new()
+            .with_port(papers_port as i32)
+            .start()
+            .unwrap();
     });
 
     let _join_mock = ::std::thread::spawn(move || {
         hyper::server::Http::new()
-            .bind(&format!("127.0.0.1:{}", mock_port).parse().unwrap(), move || {
-                Ok(MockServer::new(sender.clone()))
-            })
+            .bind(
+                &format!("127.0.0.1:{}", mock_port).parse().unwrap(),
+                move || Ok(MockServer::new(sender.clone())),
+            )
             .expect("could not bind")
             .run()
             .expect("could not run");
@@ -101,18 +104,23 @@ pub fn test_end_to_end() {
     let handle = core.handle();
     let test_client = Client::new(&handle.clone());
 
-    let document_spec = format!(r#"{{
+    let document_spec = format!(
+        r#"{{
         "assets_urls": ["http://127.0.0.1:{port}/assets/logo.png"],
         "template_url": "http://127.0.0.1:{port}/template",
         "callback_url": "http://127.0.0.1:{port}/callback",
         "variables": {{
             "who": "peter"
         }}
-    }}"#, port=mock_port);
+    }}"#,
+        port = mock_port
+    );
 
     let request: Request<hyper::Body> = Request::new(
         hyper::Method::Post,
-        format!("http://127.0.0.1:{}/submit", papers_port).parse().unwrap(),
+        format!("http://127.0.0.1:{}/submit", papers_port)
+            .parse()
+            .unwrap(),
     ).with_body(document_spec.into())
         .with_header(ContentType(mime::APPLICATION_JSON));
 
@@ -136,8 +144,9 @@ pub fn test_end_to_end() {
 
     let expectations = receiver
         .take(expected_requests.len() as u64)
-        .zip(futures::stream::iter(expected_requests))
+        .zip(futures::stream::iter_ok(expected_requests))
         .for_each(|(request, schema)| {
+            let schema = schema.unwrap();
             assert_eq!(request.path(), schema.0);
             assert_eq!(request.method(), &schema.1);
             future::ok(())

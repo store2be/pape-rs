@@ -1,11 +1,9 @@
-// Temporarily disabled because of warnings in error_chain
-// #![deny(warnings)]
-
+#![deny(warnings)]
 // `error_chain!` can recurse deeply
 #![recursion_limit = "1024"]
 
-extern crate dotenv;
 extern crate chrono;
+extern crate dotenv;
 #[macro_use]
 extern crate error_chain;
 extern crate futures;
@@ -14,8 +12,8 @@ extern crate hyper;
 extern crate hyper_tls;
 #[macro_use]
 extern crate lazy_static;
-extern crate mktemp;
 extern crate mime;
+extern crate mktemp;
 #[cfg(test)]
 #[macro_use]
 extern crate quickcheck;
@@ -24,9 +22,9 @@ extern crate rusoto_core as rusoto;
 extern crate rusoto_s3 as s3;
 extern crate serde;
 #[macro_use]
-extern crate serde_json;
-#[macro_use]
 extern crate serde_derive;
+#[macro_use]
+extern crate serde_json;
 #[macro_use]
 extern crate slog;
 extern crate sloggers;
@@ -40,6 +38,7 @@ pub mod config;
 pub mod error;
 pub mod http;
 mod human_size;
+mod latex;
 pub mod papers;
 pub mod renderer;
 mod utils;

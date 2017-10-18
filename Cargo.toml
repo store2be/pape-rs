@@ -10,7 +10,7 @@ authors = [
 [dependencies]
 chrono = "*"
 dotenv = "*"
-error-chain = "0.11.0-rc.2"
+error-chain = "^0.11.0"
 futures = "*"
 futures-cpupool = "*"
 log = "*"
@@ -29,7 +29,7 @@ rand = "*"
 rusoto_core = { git = "https://github.com/store2be/rusoto", branch = "presigned-url" }
 rusoto_s3 = { git = "https://github.com/store2be/rusoto", branch = "presigned-url" }
 tar = "*"
-tera = "*"
+tera = "^0.10"
 tokio-core = "*"
 tokio-io = "*"
 tokio-process = "*"

@@ -1,11 +1,11 @@
 extern crate futures;
+extern crate hyper;
 #[macro_use]
 extern crate lazy_static;
 extern crate mime;
-extern crate hyper;
-extern crate tokio_core;
 extern crate papers;
 extern crate serde_json as json;
+extern crate tokio_core;
 
 use futures::future;
 use futures::Future;

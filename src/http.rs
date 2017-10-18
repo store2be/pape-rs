@@ -5,7 +5,6 @@ use mime;
 use hyper;
 use hyper::client::HttpConnector;
 use hyper_tls::HttpsConnector;
-use hyper::server;
 use hyper::server::Service;
 use hyper::header::*;
 use hyper::{Request, Response};
@@ -40,22 +39,25 @@ impl ResponseExt for Response {
 
     fn with_file_unsafe(self, path: &Path) -> Self {
         let mut body: Vec<u8> = Vec::new();
-        let filename = path.file_name().unwrap().to_string_lossy().into_owned().into_bytes();
+        let filename = path.file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned()
+            .into_bytes();
         let mut file = File::open(&path).expect(&format!("could not open file {:?}", &path));
-        file.read_to_end(&mut body).expect(&format!("could not read file {:?}", &path));
-        self
-            .with_body(body)
-            .with_header(ContentDisposition {
-                disposition: DispositionType::Attachment,
-                parameters: vec![
-                    DispositionParam::Filename(Charset::Ext("utf-8".to_string()), None, filename)
-                ],
-            })
-        }
+        file.read_to_end(&mut body)
+            .expect(&format!("could not read file {:?}", &path));
+        self.with_body(body).with_header(ContentDisposition {
+            disposition: DispositionType::Attachment,
+            parameters: vec![
+                DispositionParam::Filename(Charset::Ext("utf-8".to_string()), None, filename),
+            ],
+        })
+    }
 
     fn with_header<T: Header>(mut self, header: T) -> Self {
         {
-            let mut h = self.headers_mut();
+            let h = self.headers_mut();
             h.set(header);
         }
         self
@@ -65,7 +67,6 @@ impl ResponseExt for Response {
         Box::new(self.body().from_err().fold(
             Vec::<u8>::new(),
             move |mut acc, chunk| {
-
                 if (acc.len() + chunk.len()) > limit as usize {
                     return future::err(ErrorKind::UnprocessableEntity.into());
                 }
@@ -138,7 +139,7 @@ impl RequestExt for Request {
 
     fn with_header<T: Header>(mut self, header: T) -> Self {
         {
-            let mut h = self.headers_mut();
+            let h = self.headers_mut();
             h.set(header);
         }
         self
@@ -246,17 +247,17 @@ mod tests {
     }
 
     impl Service for MockServer {
-        type Request = server::Request;
-        type Response = server::Response;
+        type Request = hyper::Request;
+        type Response = hyper::Response;
         type Error = hyper::Error;
-        type Future = Box<Future<Item = server::Response, Error = hyper::Error>>;
+        type Future = Box<Future<Item = hyper::Response, Error = hyper::Error>>;
 
         fn call(&self, req: Self::Request) -> Self::Future {
             let res = match req.path() {
-                "/assets/logo.png" => server::Response::new()
+                "/assets/logo.png" => hyper::Response::new()
                     .with_body(b"54321" as &[u8])
                     .with_header(self.response_to_logo_png.clone()),
-                _ => server::Response::new().with_status(hyper::StatusCode::NotFound),
+                _ => hyper::Response::new().with_status(hyper::StatusCode::NotFound),
             };
             Box::new(future::ok(res))
         }
@@ -345,10 +346,10 @@ mod tests {
     struct MockFileServer;
 
     impl Service for MockFileServer {
-        type Request = server::Request;
-        type Response = server::Response;
+        type Request = hyper::Request;
+        type Response = hyper::Response;
         type Error = hyper::Error;
-        type Future = Box<Future<Item = server::Response, Error = hyper::Error>>;
+        type Future = Box<Future<Item = hyper::Response, Error = hyper::Error>>;
 
         fn call(&self, _: Self::Request) -> Self::Future {
             let mut response_body: Vec<u8> = Vec::with_capacity(3000);
@@ -357,7 +358,7 @@ mod tests {
                 response_body.push((n / 250) as u8);
             }
 
-            let res = server::Response::new().with_body(response_body);
+            let res = hyper::Response::new().with_body(response_body);
             Box::new(future::ok(res))
         }
     }

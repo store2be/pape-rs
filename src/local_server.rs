@@ -1,10 +1,15 @@
 ///! This binary aims to make it simple to test a template locally: it serves the assets and the
 ///! template from the local directory, and receives the PDF from the callback endpoint.
 
-extern crate papers;
-extern crate tera;
 #[macro_use]
-extern crate serde_json as json;
+extern crate lazy_static;
+extern crate papers;
+extern crate regex;
+#[macro_use]
+extern crate serde_json;
+extern crate tera;
+
+mod latex;
 
 use std::fs::File;
 use std::io::prelude::*;
@@ -13,6 +18,7 @@ use papers::prelude::*;
 
 fn render(document_spec: DocumentSpec) -> ::std::process::ExitStatus {
     let DocumentSpec { variables, .. } = document_spec;
+    let variables = latex::escape_latex(variables);
     let template_string = ::std::fs::File::open("template.tex.tera")
         .expect("could not open template.tex.tera")
         .bytes()
@@ -39,9 +45,9 @@ fn render(document_spec: DocumentSpec) -> ::std::process::ExitStatus {
 }
 
 fn main() {
-    let variables: json::Value = if let Ok(file) = File::open("variables.json") {
+    let variables: serde_json::Value = if let Ok(file) = File::open("variables.json") {
         let bytes: Vec<u8> = file.bytes().collect::<Result<Vec<u8>, _>>().unwrap();
-        json::from_slice(&bytes).expect("variables.json is not valid JSON")
+        serde_json::from_slice(&bytes).expect("variables.json is not valid JSON")
     } else {
         json!({})
     };
@@ -52,6 +58,7 @@ fn main() {
         output_filename: "unreachable".to_string(),
         template_url: PapersUri("unreachable".parse().unwrap()),
         variables: variables,
+        no_escape_latex: ::std::default::Default::default(),
     };
 
     let exit_status = render(document_spec);

@@ -182,7 +182,6 @@ where
         });
 
         Box::new(response)
-
     }
 
     fn merge(&self, req: Request) -> Box<Future<Item = Response, Error = Error>> {
@@ -207,18 +206,13 @@ where
         let work = {
             let remote = self.remote.clone();
             let config = self.config;
-            merge_spec
-                .and_then(move |merge_spec| {
-                    remote.spawn(move |handle| {
-                        merge_documents(config, &handle, merge_spec)
-                    });
-                    Ok(())
-                })
+            merge_spec.and_then(move |merge_spec| {
+                remote.spawn(move |handle| merge_documents(config, &handle, merge_spec));
+                Ok(())
+            })
         };
 
-        let response = work.and_then(|_| {
-            ok(Response::new())
-        });
+        let response = work.and_then(|_| ok(Response::new()));
 
         Box::new(response)
     }

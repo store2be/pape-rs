@@ -98,14 +98,15 @@ pub fn upload_workspace(
 }
 
 /// Takes the path to a generated pdf and a key, returns the presigned url to the uploaded document
-pub fn upload_document(config: &'static Config, logger: Logger, pool: CpuPool, local_path: PathBuf, key: String) -> Box<Future<Item = String, Error = Error>> {
+pub fn upload_document(
+    config: &'static Config,
+    logger: Logger,
+    pool: CpuPool,
+    local_path: PathBuf,
+    key: String,
+) -> Box<Future<Item = String, Error = Error>> {
     Box::new(pool.spawn_fn(move || {
-        debug!(
-            logger,
-            "Uploading to {:?} / {:?}",
-            config.s3.bucket,
-            key
-            );
+        debug!(logger, "Uploading to {:?} / {:?}", config.s3.bucket, key);
         post_to_s3(config, &local_path, key.clone())?;
         get_presigned_url(config, key)
     }))

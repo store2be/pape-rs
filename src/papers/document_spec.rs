@@ -7,14 +7,16 @@ use papers::uri::PapersUri;
 /// for that.
 #[derive(Deserialize, Serialize, Debug)]
 pub struct DocumentSpec {
-    #[serde(default = "default_assets")]
-    pub assets_urls: Vec<PapersUri>,
+    #[serde(default = "default_assets")] pub assets_urls: Vec<PapersUri>,
     pub callback_url: PapersUri,
-    #[serde(default = "default_output_filename")]
-    pub output_filename: String,
+    #[serde(default = "default_output_filename")] pub output_filename: String,
     pub template_url: PapersUri,
-    #[serde(default = "default_value")]
-    pub variables: json::Value,
+    #[serde(default = "default_value")] pub variables: json::Value,
+    #[serde(default = "return_false")] pub no_escape_latex: bool,
+}
+
+fn return_false() -> bool {
+    false
 }
 
 fn default_assets() -> Vec<PapersUri> {

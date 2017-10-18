@@ -38,7 +38,8 @@ where
             Error::with_chain(err, "Error encoding the rendering outcome")
         })
         .and_then(move |body| {
-            let req = Request::new(hyper::Method::Post, callback_url).with_body(body.into())
+            let req = Request::new(hyper::Method::Post, callback_url)
+                .with_body(body.into())
                 .with_header(hyper::header::ContentType(mime::APPLICATION_JSON));
 
             client.call(req).map_err(|err| {
@@ -74,8 +75,8 @@ where
 }
 
 /// When an error occurs during the generation process, it is reported with this function. It calls
-/// the callback_url from the document spec, posting a `Summary` object with the error and the key
-/// where the debug output can be found.
+/// the `callback_url` from the document spec, posting a `Summary` object with the error and the
+/// key where the debug output can be found.
 pub fn report_failure<S>(
     logger: Logger,
     client: S,
@@ -95,12 +96,11 @@ where
     let res = future::result(serde_json::to_vec(&outcome))
         .map_err(Error::from)
         .and_then(move |body| {
-            let req = Request::new(hyper::Method::Post, callback_url).with_body(body.into())
+            let req = Request::new(hyper::Method::Post, callback_url)
+                .with_body(body.into())
                 .with_header(hyper::header::ContentType(mime::APPLICATION_JSON));
             client.call(req).map_err(Error::from)
         })
         .map(|_| ());
     Box::new(res)
 }
-
-

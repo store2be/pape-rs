@@ -15,6 +15,7 @@ use tera::Tera;
 use slog::Logger;
 use utils::logging::file_logger;
 
+use latex::escape_latex;
 use http::*;
 use papers::{DocumentSpec, PapersUri};
 use error::{Error, ErrorKind};
@@ -70,8 +71,14 @@ where
         let DocumentSpec {
             variables,
             template_url,
+            no_escape_latex,
             ..
         } = document_spec;
+        let variables = if no_escape_latex {
+            variables
+        } else {
+            escape_latex(variables)
+        };
         let response = self.get_template(&template_url.0);
         let max_asset_size = self.config.max_asset_size;
         let bytes = response.and_then(move |res| res.get_body_bytes_with_limit(max_asset_size));
@@ -124,8 +131,14 @@ where
             output_filename,
             template_url,
             variables,
+            no_escape_latex,
             ..
         } = document_spec;
+        let variables = if no_escape_latex {
+            variables
+        } else {
+            escape_latex(variables)
+        };
 
         let context = Context {
             assets_urls,
@@ -168,17 +181,15 @@ where
                 context.logger,
                 "Template successfully written to {:?}",
                 &template_path
-                );
+            );
             Ok((context, template_path))
         });
 
         let download_client = client.clone();
         // Download the assets and save them in the temporary directory
-        let files_written = written_template_path
-            .and_then(move |(context, template_path)| {
-                download_assets(context, download_client)
-                    .map(|(context, _)| (context, template_path))
-            });
+        let files_written = written_template_path.and_then(move |(context, template_path)| {
+            download_assets(context, download_client).map(|(context, _)| (context, template_path))
+        });
 
         // Then run latex
         let latex_out = {
@@ -214,17 +225,22 @@ where
                     Err(ErrorKind::LatexFailed(stdout).into())
                 }
             })
-        .map(move |context| {
-            // Construct the path to the generated PDF
-            let mut path = context.tmp_dir.to_path_buf();
-            path.push(Path::new(&context.output_filename));
-            (context, path)
-        });
+            .map(move |context| {
+                // Construct the path to the generated PDF
+                let mut path = context.tmp_dir.to_path_buf();
+                path.push(Path::new(&context.output_filename));
+                (context, path)
+            });
 
         let s3_upload = output_path.and_then(move |(context, path)| {
             let key = format!("{}/{}", &context.s3_prefix, &context.output_filename);
-            upload_document(context.config, context.logger.clone(), context.pool.clone(), path, key)
-                .map(|presigned_url| (context, presigned_url))
+            upload_document(
+                context.config,
+                context.logger.clone(),
+                context.pool.clone(),
+                path,
+                key,
+            ).map(|presigned_url| (context, presigned_url))
         });
 
         let callback_client = client.clone();
@@ -235,7 +251,8 @@ where
                 callback_client,
                 context.callback_url.0,
                 context.s3_prefix,
-                presigned_url)
+                presigned_url,
+            )
         });
 
         // Report errors to the callback url
@@ -255,7 +272,9 @@ where
                 .then(move |_| {
                     pool.spawn_fn(move || upload_workspace(config, logger, temp_dir_path, key))
                 })
-                .map_err(move |_| { let _hold = dir; })
+                .map_err(move |_| {
+                    let _hold = dir;
+                })
         };
 
 
@@ -277,7 +296,11 @@ where
     let tmp_dir = context.tmp_dir.to_path_buf();
     let logger = context.logger.clone();
 
-    debug!(context.logger, "Downloading assets {:?}", context.assets_urls);
+    debug!(
+        context.logger,
+        "Downloading assets {:?}",
+        context.assets_urls
+    );
     let futures = assets_urls.into_iter().map(move |uri| {
         let logger = logger.clone();
         let mut path = tmp_dir.to_path_buf();
