@@ -15,7 +15,7 @@ use tera::Tera;
 use slog::Logger;
 use utils::logging::file_logger;
 
-use latex::escape_latex;
+use latex::escape_tex;
 use http::*;
 use papers::{DocumentSpec, PapersUri};
 use error::{Error, ErrorKind};
@@ -71,13 +71,13 @@ where
         let DocumentSpec {
             variables,
             template_url,
-            no_escape_latex,
+            no_escape_tex,
             ..
         } = document_spec;
-        let variables = if no_escape_latex {
+        let variables = if no_escape_tex {
             variables
         } else {
-            escape_latex(variables)
+            escape_tex(variables)
         };
         let response = self.get_template(&template_url.0);
         let max_asset_size = self.config.max_asset_size;
@@ -131,13 +131,13 @@ where
             output_filename,
             template_url,
             variables,
-            no_escape_latex,
+            no_escape_tex,
             ..
         } = document_spec;
-        let variables = if no_escape_latex {
+        let variables = if no_escape_tex {
             variables
         } else {
-            escape_latex(variables)
+            escape_tex(variables)
         };
 
         let context = Context {

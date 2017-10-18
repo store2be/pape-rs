@@ -12,7 +12,7 @@ pub struct DocumentSpec {
     #[serde(default = "default_output_filename")] pub output_filename: String,
     pub template_url: PapersUri,
     #[serde(default = "default_value")] pub variables: json::Value,
-    #[serde(default = "return_false")] pub no_escape_latex: bool,
+    #[serde(default = "return_false")] pub no_escape_tex: bool,
 }
 
 fn return_false() -> bool {

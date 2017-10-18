@@ -18,7 +18,7 @@ use papers::prelude::*;
 
 fn render(document_spec: DocumentSpec) -> ::std::process::ExitStatus {
     let DocumentSpec { variables, .. } = document_spec;
-    let variables = latex::escape_latex(variables);
+    let variables = latex::escape_tex(variables);
     let template_string = ::std::fs::File::open("template.tex.tera")
         .expect("could not open template.tex.tera")
         .bytes()
@@ -58,7 +58,7 @@ fn main() {
         output_filename: "unreachable".to_string(),
         template_url: PapersUri("unreachable".parse().unwrap()),
         variables: variables,
-        no_escape_latex: ::std::default::Default::default(),
+        no_escape_tex: ::std::default::Default::default(),
     };
 
     let exit_status = render(document_spec);
