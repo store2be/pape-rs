@@ -88,7 +88,7 @@ where
 {
     error!(logger, "Reporting error: {}", error.display_chain());
     let outcome = Summary::Error {
-        error: format!("{}", error),
+        error: format!("{}", error.display_chain()),
         s3_folder: s3_prefix,
     };
     debug!(logger, "Summary sent to callback: {:?}", outcome);
