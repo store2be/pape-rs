@@ -35,7 +35,7 @@ pub fn merge_documents(
 ) -> Box<Future<Item = (), Error = ()>> {
     let pool = CpuPool::new(3);
     let temp_dir = Temp::new_dir().expect("Could not create a temporary directory");
-    let max_asset_size = config.max_asset_size.clone();
+    let max_asset_size = config.max_asset_size;
     let logger = file_logger(config.logger.clone(), temp_dir.as_ref());
     let s3_prefix = s3_dir_name();
     debug!(
@@ -139,7 +139,7 @@ pub fn merge_documents(
                 .to_string_lossy()
                 .into_owned();
             let key = format!("{}/{}", &s3_prefix, filename);
-            upload_document(config, logger, pool, output_path, key)
+            upload_document(config, logger, &pool, output_path, key)
         })
     };
 
@@ -151,7 +151,7 @@ pub fn merge_documents(
         presigned_url.and_then(move |presigned_url| {
             report_success(
                 config,
-                logger,
+                &logger,
                 client,
                 callback_url.0,
                 s3_prefix,
@@ -167,18 +167,19 @@ pub fn merge_documents(
         let client = client.clone();
         let s3_prefix = s3_prefix.clone();
         callback_response.or_else(move |error| {
-            report_failure(logger, client, error, s3_prefix, callback_url.0)
+            report_failure(&logger, client, &error, s3_prefix, callback_url.0)
         })
     };
 
     let tarred_workspace_uploaded = {
-        let config = config.clone();
         let key = format!("{}/{}", &s3_prefix, "workspace.tar");
         let temp_dir_path = temp_dir.to_path_buf();
         let logger = logger.clone();
         handle_errors
             .then(move |_| {
-                pool.spawn_fn(move || upload_workspace(config, logger, temp_dir_path, key))
+                pool.spawn_fn(move || {
+                    upload_workspace(config, &logger, &temp_dir_path, key)
+                })
             })
             .map_err(move |_| {
                 let _hold = temp_dir;

@@ -207,7 +207,7 @@ where
             let remote = self.remote.clone();
             let config = self.config;
             merge_spec.and_then(move |merge_spec| {
-                remote.spawn(move |handle| merge_documents(config, &handle, merge_spec));
+                remote.spawn(move |handle| merge_documents(config, handle, merge_spec));
                 Ok(())
             })
         };

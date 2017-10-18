@@ -178,7 +178,7 @@ where
             file.write_all(latex_string.as_bytes())
                 .expect("could not write latex file");
             debug!(
-                context.logger,
+                &context.logger,
                 "Template successfully written to {:?}",
                 &template_path
             );
@@ -237,7 +237,7 @@ where
             upload_document(
                 context.config,
                 context.logger.clone(),
-                context.pool.clone(),
+                &context.pool.clone(),
                 path,
                 key,
             ).map(|presigned_url| (context, presigned_url))
@@ -247,7 +247,7 @@ where
         let callback_response = s3_upload.and_then(move |(context, presigned_url)| {
             report_success(
                 context.config,
-                context.logger,
+                &context.logger,
                 callback_client,
                 context.callback_url.0,
                 context.s3_prefix,
@@ -261,16 +261,18 @@ where
             let client = self.client.clone();
             let s3_prefix = s3_prefix.clone();
             callback_response.or_else(move |error| {
-                report_failure(logger, client, error, s3_prefix, callback_url.0)
+                report_failure(&logger, client, &error, s3_prefix, callback_url.0)
             })
         };
 
         let tarred_workspace_uploaded = {
-            let config = self.config.clone();
+            let config = self.config;
             let key = format!("{}/{}", &s3_prefix, "workspace.tar");
             handle_errors
                 .then(move |_| {
-                    pool.spawn_fn(move || upload_workspace(config, logger, temp_dir_path, key))
+                    pool.spawn_fn(move || {
+                        upload_workspace(config, &logger, &temp_dir_path, key)
+                    })
                 })
                 .map_err(move |_| {
                     let _hold = dir;
@@ -291,7 +293,7 @@ fn download_assets<S>(
 where
     S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static + Clone,
 {
-    let max_asset_size = context.config.max_asset_size.clone();
+    let max_asset_size = context.config.max_asset_size;
     let assets_urls = context.assets_urls.clone();
     let tmp_dir = context.tmp_dir.to_path_buf();
     let logger = context.logger.clone();
