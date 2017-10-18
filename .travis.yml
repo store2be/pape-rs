@@ -1,8 +1,8 @@
 language: rust
 rust:
   - stable
-  # - beta
-  # - nightly
+  - beta
+  - nightly
 cache: cargo
 before_script:
   - if [ "$TRAVIS_RUST_VERSION" = "nightly" ]; then (cargo install clippy --force) fi
