@@ -34,16 +34,16 @@ extern crate tokio_core;
 extern crate tokio_io;
 extern crate tokio_process;
 
+mod human_size;
 pub mod config;
 pub mod error;
 pub mod http;
-mod human_size;
-mod latex;
+pub mod latex;
 pub mod papers;
 pub mod renderer;
-mod utils;
 pub mod server;
 pub mod test_utils;
+pub mod utils;
 
 pub mod prelude {
     pub use config::Config;

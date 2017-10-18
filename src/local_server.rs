@@ -1,20 +1,33 @@
 ///! This binary aims to make it simple to test a template locally: it serves the assets and the
 ///! template from the local directory, and receives the PDF from the callback endpoint.
-
-#[macro_use]
-extern crate lazy_static;
+extern crate chrono;
+extern crate dotenv;
+extern crate futures;
+extern crate futures_cpupool;
+extern crate hyper;
+extern crate hyper_tls;
+extern crate mime;
+extern crate mktemp;
 extern crate papers;
 extern crate regex;
+extern crate rusoto_core as rusoto;
+extern crate rusoto_s3 as s3;
+extern crate serde;
 #[macro_use]
 extern crate serde_json;
+extern crate sloggers;
+extern crate tar;
 extern crate tera;
-
-mod latex;
+extern crate tokio_core;
+extern crate tokio_io;
+extern crate tokio_process;
 
 use std::fs::File;
 use std::io::prelude::*;
 
+use papers::latex;
 use papers::prelude::*;
+use papers::utils::templating::make_tera;
 
 fn render(document_spec: DocumentSpec) -> ::std::process::ExitStatus {
     let DocumentSpec { variables, .. } = document_spec;
@@ -25,7 +38,10 @@ fn render(document_spec: DocumentSpec) -> ::std::process::ExitStatus {
         .collect::<Result<Vec<u8>, _>>()
         .unwrap();
     let template_string = String::from_utf8(template_string).unwrap();
-    let rendered_template = tera::Tera::one_off(&template_string, &variables, false)
+    let mut tera = make_tera();
+    tera.add_raw_template("template", &template_string)
+        .expect("failed to add raw template");
+    let rendered_template = tera.render("template", &variables)
         .expect("failed to render the template");
     let mut rendered_template_file =
         ::std::fs::File::create("rendered.tex").expect("could not create rendered.tex");

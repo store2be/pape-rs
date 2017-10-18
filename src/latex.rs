@@ -5,14 +5,14 @@ pub fn escape_tex_string(string: &str) -> String {
     lazy_static! {
         static ref LATEX_SPECIAL_CHARACTER: Regex = Regex::new(r"([&%$#_{}])").unwrap();
     }
-    LATEX_SPECIAL_CHARACTER.replace_all(string, "\\$1").to_string()
+    LATEX_SPECIAL_CHARACTER
+        .replace_all(string, "\\$1")
+        .to_string()
 }
 
 pub fn escape_tex(json: Value) -> Value {
     match json {
-        Value::String(s) => {
-            Value::String(escape_tex_string(&s))
-        }
+        Value::String(s) => Value::String(escape_tex_string(&s)),
         Value::Object(obj) => {
             Value::Object(obj.into_iter().map(|(k, v)| (k, escape_tex(v))).collect())
         }
