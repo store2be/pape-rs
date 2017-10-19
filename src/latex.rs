@@ -114,4 +114,10 @@ mod tests {
         });
         assert_eq!(escape_tex(original), expected);
     }
+
+    quickcheck! {
+        fn escape_tex_and_unescape_tex_roundtrip(input: String) -> bool {
+            input == unescape_tex_string(&escape_tex_string(&input))
+        }
+    }
 }
