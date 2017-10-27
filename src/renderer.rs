@@ -11,17 +11,17 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tokio_core::reactor::Handle;
 use tokio_process::CommandExt;
-use tera::Tera;
 use slog::Logger;
 use utils::logging::file_logger;
 
-use latex::escape_latex;
-use http::*;
-use papers::{DocumentSpec, PapersUri};
-use error::{Error, ErrorKind};
 use config::Config;
-use utils::s3::*;
+use error::{Error, ErrorKind};
+use http::*;
+use latex::escape_tex;
+use papers::{DocumentSpec, PapersUri};
 use utils::callbacks::*;
+use utils::s3::*;
+use utils::templating::make_tera;
 
 struct Context {
     assets_urls: Vec<PapersUri>,
@@ -71,13 +71,13 @@ where
         let DocumentSpec {
             variables,
             template_url,
-            no_escape_latex,
+            no_escape_tex,
             ..
         } = document_spec;
-        let variables = if no_escape_latex {
+        let variables = if no_escape_tex {
             variables
         } else {
-            escape_latex(variables)
+            escape_tex(variables)
         };
         let response = self.get_template(&template_url.0);
         let max_asset_size = self.config.max_asset_size;
@@ -86,7 +86,10 @@ where
             ::std::string::String::from_utf8(bytes).map_err(Error::from)
         });
         let rendered = template_string.and_then(move |template_string| {
-            Tera::one_off(&template_string, &variables, false).map_err(Error::from)
+            let mut tera = make_tera();
+            tera.add_raw_template("template", &template_string)
+                .expect("failed to add raw template");
+            tera.render("template", &variables).map_err(Error::from)
         });
         let work = rendered
             .then(|rendered| sender.send(rendered))
@@ -131,13 +134,13 @@ where
             output_filename,
             template_url,
             variables,
-            no_escape_latex,
+            no_escape_tex,
             ..
         } = document_spec;
-        let variables = if no_escape_latex {
+        let variables = if no_escape_tex {
             variables
         } else {
-            escape_latex(variables)
+            escape_tex(variables)
         };
 
         let context = Context {
@@ -167,7 +170,10 @@ where
         });
 
         let rendered_template = template_string.and_then(move |(context, template_string)| {
-            Tera::one_off(&template_string, &variables, false)
+            let mut tera = make_tera();
+            tera.add_raw_template("template", &template_string)
+                .expect("failed to add raw template");
+            tera.render("template", &variables)
                 .map(|rendered| (context, rendered))
                 .map_err(Error::from)
         });

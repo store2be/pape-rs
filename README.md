@@ -57,8 +57,8 @@ Example body:
 * `asset_urls`: An array of asset URLs that are used in the Latex template. They are downloaded next to the Latex document.
 * `variables`: The variables that are used in the Latex template.
 * `callback_url`: The URL that the final PDF or the error will be sent to.
-* `no_escape_latex`: (Optional) Disable escaping strings from `variables` for
-  LaTeX special characters like `&`, `%` and `$`.
+* `no_escape_tex`: (Optional) Disable escaping strings from `variables` for
+  TeX special characters like `&`, `%` and `$`.
 
 
 ### POST /preview
@@ -100,6 +100,11 @@ hello, {{world}}
 
 \end{document}
 ```
+
+Papers registers two custom [Tera filters](https://tera.netlify.com/docs/templates/#filters) which can be used in your templates:
+
+- `unescape_tex`: Papers defaults to escaping TeX special characters. This filter will remove the escape backslashes to make the contents of the variable be evaluated as TeX.
+- `escape_tex`: escapes TeX special characters - this is done by default by Papers so it's only useful combined with the `no_escape_tex` setting in the POST body.
 
 ## Local server
 
