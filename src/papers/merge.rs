@@ -118,12 +118,12 @@ pub fn merge_documents(
         output_path.push(&spec.output_filename);
         let logger = logger.clone();
         merged.and_then(move |output| {
-            let stdout = String::from_utf8(output.stdout).expect("Output was not valid utf8");
+            let stdout_and_err = ::utils::process::whole_output(&output).expect("output is utf8");
             if output.status.success() {
-                debug!(logger, "{}", stdout);
+                debug!(logger, "pdfunite output: {}", stdout_and_err);
                 Ok(output_path)
             } else {
-                Err(ErrorKind::MergeFailed(stdout).into())
+                Err(ErrorKind::MergeFailed(stdout_and_err).into())
             }
         })
     };
@@ -224,12 +224,12 @@ fn image_to_pdf(
             Error::with_chain(err, "Error while converting image to pdf")
         })
         .and_then(move |output| {
-            let stdout = String::from_utf8(output.stdout).unwrap();
+            let stdout_and_err = ::utils::process::whole_output(&output).expect("output is utf8");
             if output.status.success() {
-                debug!(logger, "{}", stdout);
+                debug!(logger, "ImageMagick output {}", stdout_and_err);
                 Ok(final_path)
             } else {
-                Err(ErrorKind::MergeFailed(stdout).into())
+                Err(ErrorKind::MergeFailed(stdout_and_err).into())
             }
         });
 
