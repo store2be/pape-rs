@@ -9,6 +9,7 @@
 * Implement LaTeX escaping
 * Force images in merges to have A4 aspect ratio *and* size
 * Register `escape_tex` and `unescape_tex` filters for Tera templates
+* Report both stdout and stderr in merge errors
 
 ## [0.2.3] - 2017-08-31
 * Add a `/merge` endpoint that takes a MergeSpec and merges documents into a
