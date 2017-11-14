@@ -55,4 +55,15 @@ mod tests {
         assert_eq!(spec.variables, json!({}));
         assert_eq!(spec.assets_urls.len(), 0);
     }
+
+    #[test]
+    fn it_parses_uris() {
+        let json = r#"{
+            "callback_url": "abc",
+            "template_url": " http://127.0.0.1/template  "
+        }"#;
+        let spec = from_str::<DocumentSpec>(&json).unwrap();
+        assert_eq!(spec.variables, json!({}));
+        assert_eq!(format!("{}", spec.template_url.0), "http://127.0.0.1/template");
+    }
 }

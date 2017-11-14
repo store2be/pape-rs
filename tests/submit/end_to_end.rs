@@ -104,11 +104,12 @@ pub fn test_end_to_end() {
     let handle = core.handle();
     let test_client = Client::new(&handle.clone());
 
+    // Some URLs in this test have whitespace left in on purpose to test parsing
     let document_spec = format!(
         r#"{{
-        "assets_urls": ["http://127.0.0.1:{port}/assets/logo.png"],
-        "template_url": "http://127.0.0.1:{port}/template",
-        "callback_url": "http://127.0.0.1:{port}/callback",
+        "assets_urls": ["  http://127.0.0.1:{port}/assets/logo.png       "],
+        "template_url": "     http://127.0.0.1:{port}/template  ",
+        "callback_url": " http://127.0.0.1:{port}/callback ",
         "variables": {{
             "who": "peter"
         }}
