@@ -19,6 +19,6 @@ mod uri_deserializer {
         D: Deserializer<'de>,
     {
         let uri_string = String::deserialize(deserializer)?;
-        uri_string.parse().map_err(serde::de::Error::custom)
+        uri_string.trim().parse().map_err(serde::de::Error::custom)
     }
 }
