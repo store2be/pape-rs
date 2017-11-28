@@ -39,6 +39,7 @@ pub mod config;
 pub mod error;
 pub mod http;
 pub mod latex;
+pub mod local_server;
 pub mod papers;
 pub mod renderer;
 pub mod server;

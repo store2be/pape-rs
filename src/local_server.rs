@@ -1,33 +1,10 @@
-///! This binary aims to make it simple to test a template locally: it serves the assets and the
-///! template from the local directory, and receives the PDF from the callback endpoint.
-extern crate chrono;
-extern crate dotenv;
-extern crate futures;
-extern crate futures_cpupool;
-extern crate hyper;
-extern crate hyper_tls;
-extern crate mime;
-extern crate mktemp;
-extern crate papers;
-extern crate regex;
-extern crate rusoto_core as rusoto;
-extern crate rusoto_s3 as s3;
-extern crate serde;
-#[macro_use]
-extern crate serde_json;
-extern crate sloggers;
-extern crate tar;
-extern crate tera;
-extern crate tokio_core;
-extern crate tokio_io;
-extern crate tokio_process;
-
 use std::fs::File;
 use std::io::prelude::*;
+use serde_json;
 
-use papers::latex;
-use papers::prelude::*;
-use papers::utils::templating::make_tera;
+use latex;
+use prelude::*;
+use utils::templating::make_tera;
 
 fn render(document_spec: DocumentSpec) -> ::std::process::ExitStatus {
     let DocumentSpec { variables, .. } = document_spec;
@@ -60,7 +37,9 @@ fn render(document_spec: DocumentSpec) -> ::std::process::ExitStatus {
     outcome.status
 }
 
-fn main() {
+/// This function aims to make it simple to test a template locally: it serves the assets and the
+/// template from the local directory, and receives the PDF from the callback endpoint.
+pub fn render_locally() {
     let variables: serde_json::Value = if let Ok(file) = File::open("variables.json") {
         let bytes: Vec<u8> = file.bytes().collect::<Result<Vec<u8>, _>>().unwrap();
         serde_json::from_slice(&bytes).expect("variables.json is not valid JSON")

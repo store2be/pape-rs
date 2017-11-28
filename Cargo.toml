@@ -28,6 +28,8 @@ sloggers = "^0.2"
 rand = "*"
 rusoto_core = { git = "https://github.com/store2be/rusoto", branch = "presigned-url" }
 rusoto_s3 = { git = "https://github.com/store2be/rusoto", branch = "presigned-url" }
+structopt = "0.1.6"
+structopt-derive = "0.1.0"
 tar = "*"
 tera = "^0.10"
 tokio-core = "*"
@@ -37,13 +39,3 @@ tokio-process = "*"
 [dependencies.slog]
 version = "^2"
 features = ["max_level_debug", "release_max_level_debug"]
-
-[[bin]]
-name = "papers-server"
-path = "./src/main.rs"
-test = false
-
-[[bin]]
-name = "papers-local"
-path = "./src/local_server.rs"
-test = false
