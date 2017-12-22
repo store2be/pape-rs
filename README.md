@@ -16,6 +16,7 @@ A Latex template to PDF generation web service written in Rust. Papers is availa
 * [Simple example](examples/simple)
 * [Papers on Kubernetes](examples/kubernetes)
 * [Merge documents with Papers](examples/concatenation)
+* [LaTeX + Tera templates tips and tricks](https://github.com/store2be/pape-rs/wiki/LaTeX-template-tips-and-tricks)
 
 
 ## Security
