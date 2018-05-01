@@ -41,9 +41,9 @@ error_chain! {
             description("A document merge failed")
             display("The provided documents could not be merged, output:\n{}", output)
         }
-        UnprocessableEntity {
+        UnprocessableEntity(reason: String) {
             description("Unprocessable entity")
-            display("Unprocessable entity.")
+            display("Unprocessable entity:\n{}", reason)
         }
     }
 }
@@ -51,7 +51,7 @@ error_chain! {
 impl Error {
     pub fn into_response(self) -> Response {
         match self {
-            Error(ErrorKind::UnprocessableEntity, _) => {
+            Error(ErrorKind::UnprocessableEntity(_), _) => {
                 Response::new().with_status(StatusCode::UnprocessableEntity)
             }
             Error(ErrorKind::Forbidden, _) => Response::new().with_status(StatusCode::Forbidden),

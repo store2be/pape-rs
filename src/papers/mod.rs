@@ -97,7 +97,7 @@ where
         }
 
         if !req.has_content_type(mime::APPLICATION_JSON) {
-            return Box::new(err(ErrorKind::UnprocessableEntity.into()));
+            return Box::new(err(ErrorKind::UnprocessableEntity("Request content type is not application/json".to_string()).into()));
         }
 
         let body = req.get_body_bytes();
@@ -105,7 +105,7 @@ where
         let document_spec = body.and_then(|body| {
             result(
                 serde_json::from_slice::<DocumentSpec>(body.as_slice())
-                    .map_err(|err| Error::with_chain(err, ErrorKind::UnprocessableEntity)),
+                    .map_err(|err| Error::with_chain(err, ErrorKind::UnprocessableEntity("DocumentSpec failed".to_string()))),
             )
         });
 
@@ -119,7 +119,7 @@ where
                      To change it set PAPERS_MAX_ASSETS_PER_DOCUMENT",
                     max_assets_per_document,
                 );
-                return err(ErrorKind::UnprocessableEntity.into());
+                return err(ErrorKind::UnprocessableEntity("Max assetes per document exceeded".to_string()).into());
             }
             ok(spec)
         });
@@ -147,14 +147,14 @@ where
         }
 
         if !req.has_content_type(mime::APPLICATION_JSON) {
-            return Box::new(err(ErrorKind::UnprocessableEntity.into()));
+            return Box::new(err(ErrorKind::UnprocessableEntity("Request content type is not application/json".to_string()).into()));
         }
 
         let body = req.get_body_bytes();
         let document_spec = body.and_then(|body| {
             result(
                 serde_json::from_slice::<DocumentSpec>(body.as_slice())
-                    .map_err(|_| ErrorKind::UnprocessableEntity.into()),
+                    .map_err(|_| ErrorKind::UnprocessableEntity("DocumentSpec failed".to_string()).into()),
             )
         });
 
@@ -193,14 +193,14 @@ where
         }
 
         if !req.has_content_type(mime::APPLICATION_JSON) {
-            return Box::new(err(ErrorKind::UnprocessableEntity.into()));
+            return Box::new(err(ErrorKind::UnprocessableEntity("Request content type is not application/json".to_string()).into()));
         }
 
         let body = req.get_body_bytes();
         let merge_spec = body.and_then(|body| {
             result(
                 serde_json::from_slice::<MergeSpec>(body.as_slice())
-                    .map_err(|err| Error::with_chain(err, ErrorKind::UnprocessableEntity)),
+                    .map_err(|err| Error::with_chain(err, ErrorKind::UnprocessableEntity("Merge Spec failed".to_string()))),
             )
         });
 

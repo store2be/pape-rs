@@ -68,7 +68,7 @@ impl ResponseExt for Response {
             Vec::<u8>::new(),
             move |mut acc, chunk| {
                 if (acc.len() + chunk.len()) > limit as usize {
-                    return future::err(ErrorKind::UnprocessableEntity.into());
+                    return future::err(ErrorKind::UnprocessableEntity("too big".to_string()).into());
                 }
 
                 acc.extend_from_slice(&chunk);
