@@ -27,11 +27,11 @@ error_chain! {
     errors {
         Forbidden {
             description("Forbidden")
-            display("Forbidden")
+            display("Forbidden.")
         }
         InternalServerError {
             description("Internal server error")
-            display("Internal server error")
+            display("Internal server error.")
         }
         LatexFailed(output: String) {
             description("The latex command failed")
@@ -43,7 +43,7 @@ error_chain! {
         }
         UnprocessableEntity {
             description("Unprocessable entity")
-            display("Unprocessable entity")
+            display("Unprocessable entity.")
         }
     }
 }

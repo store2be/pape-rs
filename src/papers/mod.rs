@@ -13,6 +13,7 @@ use hyper::client::{Client, HttpConnector};
 use hyper::server::{NewService, Request, Response, Service};
 use hyper::header::{Authorization, Bearer};
 use hyper_tls::HttpsConnector;
+extern crate sentry;
 use serde_json;
 use slog;
 use std::marker::PhantomData;
@@ -241,7 +242,10 @@ where
             _ => Box::new(ok(Response::new().with_status(StatusCode::NotFound))),
         }.then(|handler_result| match handler_result {
             Ok(response) => ok(response),
-            Err(err) => ok(err.into_response()),
+            Err(err) => {
+                sentry::capture_message(&err.to_string(), sentry::Level::Error);
+                ok(err.into_response())
+            }
         });
 
         Box::new(response)
