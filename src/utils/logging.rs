@@ -1,7 +1,7 @@
 use slog::{Drain, Duplicate, Logger};
-use sloggers::Build;
 use sloggers::file::FileLoggerBuilder;
 use sloggers::types::Severity;
+use sloggers::Build;
 use std::path::Path;
 
 /// This returns a logger that also logs to the file pointed by the path parameter on top of the

@@ -1,5 +1,5 @@
-use std::str::FromStr;
 use regex::Regex;
+use std::str::FromStr;
 
 /// Represents a size as a number of bytes
 #[derive(Clone, Copy, Debug)]
@@ -37,8 +37,8 @@ impl FromStr for Bytes {
 
 #[cfg(test)]
 mod tests {
-    use quickcheck::{Arbitrary, Gen};
     use super::*;
+    use quickcheck::{Arbitrary, Gen};
 
     #[test]
     fn test_bytes_from_str() {

@@ -1,9 +1,9 @@
 use hyper;
 use hyper::server::Response;
 use hyper::StatusCode;
-use tera;
 use s3;
 use serde_json;
+use tera;
 
 error_chain! {
     types {
@@ -55,10 +55,10 @@ impl Error {
                 Response::new().with_status(StatusCode::UnprocessableEntity)
             }
             Error(ErrorKind::Forbidden, _) => Response::new().with_status(StatusCode::Forbidden),
-            Error(ErrorKind::InternalServerError, _) |
-            Error(ErrorKind::Tera(_), _) |
-            Error(ErrorKind::UriError(_), _) |
-            Error(ErrorKind::Hyper(_), _) => {
+            Error(ErrorKind::InternalServerError, _)
+            | Error(ErrorKind::Tera(_), _)
+            | Error(ErrorKind::UriError(_), _)
+            | Error(ErrorKind::Hyper(_), _) => {
                 Response::new().with_status(StatusCode::InternalServerError)
             }
             _ => unreachable!(),

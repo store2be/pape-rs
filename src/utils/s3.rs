@@ -1,18 +1,18 @@
-use tar;
-use futures_cpupool::CpuPool;
-use futures::Future;
-use std::io::prelude::*;
-use std::path::{Path, PathBuf};
 use chrono::Utc;
+use futures::Future;
+use futures_cpupool::CpuPool;
 use rusoto;
 use s3;
 use s3::S3;
 use slog::Logger;
 use std::default::Default;
 use std::fs::File;
+use std::io::prelude::*;
+use std::path::{Path, PathBuf};
+use tar;
 
-use error::Error;
 use config::Config;
+use error::Error;
 
 pub fn s3_dir_name() -> String {
     format!("{}", Utc::now())
@@ -57,9 +57,9 @@ pub fn get_presigned_url(config: &'static Config, key: String) -> Result<String,
         response_expires: Some(format!("{}", config.s3.expiration_time)),
         ..Default::default()
     };
-    client.presigned_url(&request).map_err(|err| {
-        Error::with_chain(err, "Could not generate presigned url")
-    })
+    client
+        .presigned_url(&request)
+        .map_err(|err| Error::with_chain(err, "Could not generate presigned url"))
 }
 
 /// This function is responsible for uploading a tar file with the contents from the workspace (the

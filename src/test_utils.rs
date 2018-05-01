@@ -1,7 +1,7 @@
 use futures::future::*;
 use hyper;
-use hyper::{Request, Response};
 use hyper::server::Service;
+use hyper::{Request, Response};
 use papers::FromHandle;
 use tokio_core::reactor::Handle;
 

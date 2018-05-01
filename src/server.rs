@@ -1,12 +1,12 @@
 use papers::Papers;
 
+use config::Config;
 use futures::future;
 use futures::Stream;
-use hyper::Client;
 use hyper::server::{Http, NewService};
+use hyper::Client;
 use hyper_tls::HttpsConnector;
 use tokio_core;
-use config::Config;
 
 pub struct Server {
     port: i32,

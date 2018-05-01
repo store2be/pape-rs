@@ -27,18 +27,18 @@ extern crate serde_derive;
 extern crate serde_json;
 #[macro_use]
 extern crate slog;
+extern crate sentry;
 extern crate sloggers;
 extern crate tar;
 extern crate tera;
 extern crate tokio_core;
 extern crate tokio_io;
 extern crate tokio_process;
-extern crate sentry;
 
-mod human_size;
 pub mod config;
 pub mod error;
 pub mod http;
+mod human_size;
 pub mod latex;
 pub mod local_server;
 pub mod papers;

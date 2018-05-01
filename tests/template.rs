@@ -10,10 +10,10 @@ extern crate tokio_core;
 use futures::future;
 use futures::Future;
 use hyper::client::Request;
-use hyper::server::{self, Service};
 use hyper::header::ContentType;
-use papers::prelude::*;
+use hyper::server::{self, Service};
 use papers::http::*;
+use papers::prelude::*;
 
 static TEMPLATE: &'static str = r"
 \documentclass{article}

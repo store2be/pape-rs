@@ -1,5 +1,5 @@
-use serde_json::Value;
 use regex::Regex;
+use serde_json::Value;
 
 pub fn unescape_tex_string(string: &str) -> String {
     lazy_static! {

@@ -1,6 +1,6 @@
+use serde_json;
 use std::fs::File;
 use std::io::prelude::*;
-use serde_json;
 
 use latex;
 use prelude::*;
