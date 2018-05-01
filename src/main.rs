@@ -4,8 +4,8 @@ extern crate papers;
 extern crate structopt;
 #[macro_use]
 extern crate structopt_derive;
-extern crate sentry;
 
+use sentry;
 use sentry::integrations::panic::register_panic_handler;
 use structopt::StructOpt;
 

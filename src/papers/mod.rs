@@ -13,7 +13,7 @@ use hyper::client::{Client, HttpConnector};
 use hyper::server::{NewService, Request, Response, Service};
 use hyper::header::{Authorization, Bearer};
 use hyper_tls::HttpsConnector;
-extern crate sentry;
+use sentry;
 use serde_json;
 use slog;
 use std::marker::PhantomData;

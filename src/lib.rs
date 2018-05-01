@@ -33,6 +33,7 @@ extern crate tera;
 extern crate tokio_core;
 extern crate tokio_io;
 extern crate tokio_process;
+extern crate sentry;
 
 mod human_size;
 pub mod config;

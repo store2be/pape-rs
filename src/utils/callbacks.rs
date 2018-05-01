@@ -7,7 +7,7 @@ use serde_json;
 use slog::Logger;
 use error_chain::ChainedError;
 use mime;
-extern crate sentry;
+use sentry;
 
 use http::*;
 use papers::Summary;
