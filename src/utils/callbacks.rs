@@ -7,6 +7,7 @@ use serde_json;
 use slog::Logger;
 use error_chain::ChainedError;
 use mime;
+extern crate sentry;
 
 use http::*;
 use papers::Summary;
@@ -88,6 +89,8 @@ where
     S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static,
 {
     error!(logger, "Reporting error: {}", error.display_chain());
+    sentry::capture_message(&error.display_chain().to_string(), sentry::Level::Error);
+
     let outcome = Summary::Error {
         error: format!("{}", error.display_chain()),
         s3_folder: s3_prefix,
