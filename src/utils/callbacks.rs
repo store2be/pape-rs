@@ -88,6 +88,8 @@ where
 {
     error!(logger, "Reporting error: {}", error.display_chain());
     sentry::capture_message(&error.display_chain().to_string(), sentry::Level::Error);
+    // Does not work :/
+    // sentry::integrations::error_chain::capture_error_chain(&error);
 
     let outcome = Summary::Error {
         error: format!("{}", error.display_chain()),

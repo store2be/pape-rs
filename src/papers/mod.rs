@@ -261,6 +261,8 @@ where
             Ok(response) => ok(response),
             Err(err) => {
                 sentry::capture_message(&err.to_string(), sentry::Level::Error);
+                // Does not work :/
+                // sentry::integrations::error_chain::capture_error_chain(&err);
                 ok(err.into_response())
             }
         });
