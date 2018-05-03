@@ -1,17 +1,18 @@
+use error_chain::ChainedError;
 use futures::future;
 use futures::Future;
 use hyper;
-use hyper::{Request, Response, Uri};
 use hyper::server::Service;
+use hyper::{Request, Response, Uri};
+use mime;
+use sentry;
 use serde_json;
 use slog::Logger;
-use error_chain::ChainedError;
-use mime;
 
+use config::Config;
+use error::Error;
 use http::*;
 use papers::Summary;
-use error::Error;
-use config::Config;
 
 /// This reports to the provided callback url with the presigned URL of the generated PDF and the
 /// location of the debugging output. It returns the response from the callback url as a future.
@@ -34,17 +35,15 @@ where
     debug!(logger, "Summary sent to callback: {:?}", outcome);
 
     let callback_response = future::result(serde_json::to_vec(&outcome))
-        .map_err(|err| {
-            Error::with_chain(err, "Error encoding the rendering outcome")
-        })
+        .map_err(|err| Error::with_chain(err, "Error encoding the rendering outcome"))
         .and_then(move |body| {
             let req = Request::new(hyper::Method::Post, callback_url)
                 .with_body(body.into())
                 .with_header(hyper::header::ContentType(mime::APPLICATION_JSON));
 
-            client.call(req).map_err(|err| {
-                Error::with_chain(err, "Error posting to callback URL")
-            })
+            client
+                .call(req)
+                .map_err(|err| Error::with_chain(err, "Error posting to callback URL"))
         });
 
     let response_bytes = {
@@ -88,6 +87,10 @@ where
     S: Service<Request = Request, Response = Response, Error = hyper::Error> + 'static,
 {
     error!(logger, "Reporting error: {}", error.display_chain());
+    sentry::capture_message(&error.display_chain().to_string(), sentry::Level::Error);
+    // Does not work :/
+    // sentry::integrations::error_chain::capture_error_chain(&error);
+
     let outcome = Summary::Error {
         error: format!("{}", error.display_chain()),
         s3_folder: s3_prefix,

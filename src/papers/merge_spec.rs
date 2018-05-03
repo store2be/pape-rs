@@ -3,9 +3,11 @@ use papers::uri::PapersUri;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct MergeSpec {
-    #[serde(default = "default_assets")] pub assets_urls: Vec<PapersUri>,
+    #[serde(default = "default_assets")]
+    pub assets_urls: Vec<PapersUri>,
     pub callback_url: PapersUri,
-    #[serde(default = "default_output_filename")] pub output_filename: String,
+    #[serde(default = "default_output_filename")]
+    pub output_filename: String,
 }
 
 fn default_assets() -> Vec<PapersUri> {

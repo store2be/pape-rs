@@ -1,12 +1,12 @@
+use chrono::{DateTime, Duration, Utc};
 use dotenv::dotenv;
 use human_size::Bytes;
-use std::str::FromStr;
-use slog::{self, Logger};
-use sloggers::{self, Build};
-use sloggers::types::Severity;
 use rusoto::credential::{AwsCredentials, CredentialsError, ProvideAwsCredentials};
-use chrono::{DateTime, Duration, Utc};
 use rusoto::region::Region;
+use slog::{self, Logger};
+use sloggers::types::Severity;
+use sloggers::{self, Build};
+use std::str::FromStr;
 
 fn max_assets_per_document(logger: &Logger) -> u8 {
     let default = 20;

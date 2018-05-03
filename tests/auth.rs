@@ -8,18 +8,18 @@ extern crate lazy_static;
 
 use futures::Future;
 use hyper::client::Request;
+use hyper::header::{Authorization, Bearer};
 use hyper::server::Service;
 use hyper::Method::Post;
-use hyper::header::{Authorization, Bearer};
 use papers::config::Config;
+use papers::http::RequestExt;
 use papers::papers::Papers;
 use papers::test_utils::NoopService;
-use papers::http::RequestExt;
 
 fn config_with_auth() -> &'static Config {
     lazy_static! {
-        static ref CONFIG_WITH_AUTH: Config = Config::from_env()
-            .with_auth("secret-string".to_string());
+        static ref CONFIG_WITH_AUTH: Config =
+            Config::from_env().with_auth("secret-string".to_string());
     }
 
     &CONFIG_WITH_AUTH
@@ -32,8 +32,6 @@ fn config_empty_auth() -> &'static Config {
 
     &CONFIG_EMPTY_AUTH
 }
-
-
 
 #[test]
 fn test_submit_ignore_auth_when_bearer_not_set() {
@@ -57,10 +55,11 @@ fn test_submit_fails_when_auth_is_expected_but_missing() {
 #[test]
 fn test_submit_fails_if_auth_header_does_not_match_env_var() {
     let core = tokio_core::reactor::Core::new().unwrap();
-    let request = Request::new(Post, "http://127.0.0.1:38021/submit".parse().unwrap())
-        .with_header(Authorization(Bearer {
+    let request = Request::new(Post, "http://127.0.0.1:38021/submit".parse().unwrap()).with_header(
+        Authorization(Bearer {
             token: "other-string".to_string(),
-        }));
+        }),
+    );
     let service: Papers<NoopService> = Papers::new(core.remote(), config_with_auth());
     let response = service.call(request).wait().unwrap();
     assert_eq!(response.status(), hyper::StatusCode::Forbidden);
@@ -69,10 +68,11 @@ fn test_submit_fails_if_auth_header_does_not_match_env_var() {
 #[test]
 fn test_submit_succeeds_if_auth_header_matches_env_var() {
     let core = tokio_core::reactor::Core::new().unwrap();
-    let request = Request::new(Post, "http://127.0.0.1:38020/submit".parse().unwrap())
-        .with_header(Authorization(Bearer {
+    let request = Request::new(Post, "http://127.0.0.1:38020/submit".parse().unwrap()).with_header(
+        Authorization(Bearer {
             token: "secret-string".to_string(),
-        }));
+        }),
+    );
     let service: Papers<NoopService> = Papers::new(core.remote(), config_with_auth());
     let response = service.call(request).wait().unwrap();
     assert_eq!(response.status(), hyper::StatusCode::UnprocessableEntity);

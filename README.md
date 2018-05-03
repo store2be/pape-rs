@@ -80,7 +80,7 @@ Example body:
   ],
   "variables": {
     "world": "World"
-  },
+  }
 }
 ```
 
@@ -168,13 +168,13 @@ The key will be used for the S3 uploads.
 
 Required.
 
-## PAPERS_AWS_SECRET_KEY
+### PAPERS_AWS_SECRET_KEY
 
 The secret key corresponding to `PAPERS_AWS_ACCESS_KEY`.
 
 Required.
 
-## PAPERS_S3_BUCKET
+### PAPERS_S3_BUCKET
 
 The S3 bucket where generated documents and debug output should be uploaded.
 
@@ -184,7 +184,7 @@ Required.
 Example: my-company-name-papers
 ```
 
-## PAPERS_AWS_REGION
+### PAPERS_AWS_REGION
 
 The AWS region the bucket belongs to.
 
@@ -194,10 +194,18 @@ Required.
 Example: eu-central-1
 ```
 
-## PAPERS_S3_EXPIRATION_TIME
+### PAPERS_S3_EXPIRATION_TIME
 
 The expiration delay on the presigned urls returned to the callback url, in seconds.
 
 ```
 Default: 86400
+```
+
+### SENTRY_DSN
+
+This is for tracking errors with [sentry.io](https://sentry.io). If left blank, nothing will happen.
+
+```
+Default: ""
 ```

@@ -5,12 +5,12 @@ extern crate lazy_static;
 extern crate papers;
 extern crate tokio_core;
 
-use hyper::Request;
-use hyper::server::Service;
-use papers::papers::Papers;
-use papers::config::Config;
-use papers::test_utils::NilService;
 use futures::Future;
+use hyper::server::Service;
+use hyper::Request;
+use papers::config::Config;
+use papers::papers::Papers;
+use papers::test_utils::NilService;
 
 fn config() -> &'static Config {
     lazy_static! {

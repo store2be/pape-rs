@@ -1,9 +1,9 @@
 use hyper;
 use hyper::server::Response;
 use hyper::StatusCode;
-use tera;
 use s3;
 use serde_json;
+use tera;
 
 error_chain! {
     types {
@@ -27,11 +27,11 @@ error_chain! {
     errors {
         Forbidden {
             description("Forbidden")
-            display("Forbidden")
+            display("Forbidden.")
         }
         InternalServerError {
             description("Internal server error")
-            display("Internal server error")
+            display("Internal server error.")
         }
         LatexFailed(output: String) {
             description("The latex command failed")
@@ -41,9 +41,9 @@ error_chain! {
             description("A document merge failed")
             display("The provided documents could not be merged, output:\n{}", output)
         }
-        UnprocessableEntity {
+        UnprocessableEntity(reason: String) {
             description("Unprocessable entity")
-            display("Unprocessable entity")
+            display("Unprocessable entity:\n{}", reason)
         }
     }
 }
@@ -51,14 +51,14 @@ error_chain! {
 impl Error {
     pub fn into_response(self) -> Response {
         match self {
-            Error(ErrorKind::UnprocessableEntity, _) => {
+            Error(ErrorKind::UnprocessableEntity(_), _) => {
                 Response::new().with_status(StatusCode::UnprocessableEntity)
             }
             Error(ErrorKind::Forbidden, _) => Response::new().with_status(StatusCode::Forbidden),
-            Error(ErrorKind::InternalServerError, _) |
-            Error(ErrorKind::Tera(_), _) |
-            Error(ErrorKind::UriError(_), _) |
-            Error(ErrorKind::Hyper(_), _) => {
+            Error(ErrorKind::InternalServerError, _)
+            | Error(ErrorKind::Tera(_), _)
+            | Error(ErrorKind::UriError(_), _)
+            | Error(ErrorKind::Hyper(_), _) => {
                 Response::new().with_status(StatusCode::InternalServerError)
             }
             _ => unreachable!(),

@@ -1,21 +1,21 @@
-use futures_cpupool::CpuPool;
 use futures;
-use tokio_core;
 use futures::future::*;
-use futures::{Future, Sink, Stream};
-use hyper::client::Client;
-use mime;
-use hyper::server;
-use hyper::header::ContentType;
 use futures::sync::mpsc;
+use futures::{Future, Sink, Stream};
+use futures_cpupool::CpuPool;
 use hyper;
+use hyper::client::Client;
+use hyper::header::ContentType;
+use hyper::server;
 use hyper::{Request, Response};
 use json;
+use mime;
 use std::path::*;
+use tokio_core;
 
 use papers;
-use papers::prelude::*;
 use papers::http::*;
+use papers::prelude::*;
 use toolbox;
 
 type Message = &'static str;
@@ -52,9 +52,9 @@ impl server::Service for MockServer {
             "/callback" => {
                 let sender = self.sender.clone();
                 let res = req.get_body_bytes()
-                    .and_then(|bytes| {
-                        ok(json::from_slice::<Summary>(&bytes).expect("could not read summary"))
-                    })
+                    .and_then(
+                        |bytes| ok(json::from_slice::<Summary>(&bytes).expect("could not read summary")),
+                    )
                     .map(|summary| {
                         if let Summary::Error { error: err, .. } = summary {
                             panic!("Error reported to callback endpoint: {}", err);

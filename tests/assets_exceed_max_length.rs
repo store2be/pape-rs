@@ -18,8 +18,7 @@ use papers::prelude::*;
 #[test]
 fn test_assets_exceed_max_length() {
     lazy_static! {
-        static ref CONFIG: Config = Config::from_env()
-            .with_max_assets_per_document(1);
+        static ref CONFIG: Config = Config::from_env().with_max_assets_per_document(1);
     }
 
     std::thread::spawn(|| {

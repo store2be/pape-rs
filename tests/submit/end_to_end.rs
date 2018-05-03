@@ -7,11 +7,11 @@ extern crate slog;
 extern crate tokio_core;
 
 use futures::future;
+use futures::sync::mpsc;
 use futures::{Future, Sink, Stream};
 use hyper::client::{Client, Request};
-use hyper::server;
 use hyper::header::ContentType;
-use futures::sync::mpsc;
+use hyper::server;
 use toolbox;
 
 use papers::http::*;

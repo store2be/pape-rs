@@ -1,17 +1,17 @@
-use futures::sync::oneshot;
 use futures::future;
+use futures::sync::oneshot;
 use futures::Future;
 use futures_cpupool::CpuPool;
 use hyper;
-use hyper::{Request, Response, Uri};
 use hyper::server::Service;
+use hyper::{Request, Response, Uri};
 use mktemp::Temp;
+use slog::Logger;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tokio_core::reactor::Handle;
 use tokio_process::CommandExt;
-use slog::Logger;
 use utils::logging::file_logger;
 
 use config::Config;
@@ -82,9 +82,8 @@ where
         let response = self.get_template(&template_url.0);
         let max_asset_size = self.config.max_asset_size;
         let bytes = response.and_then(move |res| res.get_body_bytes_with_limit(max_asset_size));
-        let template_string = bytes.and_then(|bytes| {
-            ::std::string::String::from_utf8(bytes).map_err(Error::from)
-        });
+        let template_string =
+            bytes.and_then(|bytes| ::std::string::String::from_utf8(bytes).map_err(Error::from));
         let rendered = template_string.and_then(move |template_string| {
             let mut tera = make_tera();
             tera.add_raw_template("template", &template_string)
@@ -117,15 +116,14 @@ where
         let logger = file_logger(self.config.logger.clone(), &temp_dir_path);
 
         let mut template_path = temp_dir_path.clone();
-        template_path.push(Path::new(
-            &document_spec.output_filename.replace("pdf", "tex"),
-        ));
+        template_path.push(Path::new(&document_spec
+            .output_filename
+            .replace("pdf", "tex")));
         let max_asset_size = self.config.max_asset_size;
 
         debug!(
             logger,
-            "Trying to generate PDF with document spec: {:?}",
-            document_spec
+            "Trying to generate PDF with document spec: {:?}", document_spec
         );
 
         let DocumentSpec {
@@ -185,8 +183,7 @@ where
                 .expect("could not write latex file");
             debug!(
                 &context.logger,
-                "Template successfully written to {:?}",
-                &template_path
+                "Template successfully written to {:?}", &template_path
             );
             Ok((context, template_path))
         });
@@ -276,15 +273,12 @@ where
             let key = format!("{}/{}", &s3_prefix, "workspace.tar");
             handle_errors
                 .then(move |_| {
-                    pool.spawn_fn(move || {
-                        upload_workspace(config, &logger, &temp_dir_path, key)
-                    })
+                    pool.spawn_fn(move || upload_workspace(config, &logger, &temp_dir_path, key))
                 })
                 .map_err(move |_| {
                     let _hold = dir;
                 })
         };
-
 
         Box::new(tarred_workspace_uploaded)
     }
@@ -306,8 +300,7 @@ where
 
     debug!(
         context.logger,
-        "Downloading assets {:?}",
-        context.assets_urls
+        "Downloading assets {:?}", context.assets_urls
     );
     let futures = assets_urls.into_iter().map(move |uri| {
         let logger = logger.clone();

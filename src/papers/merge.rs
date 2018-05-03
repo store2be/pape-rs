@@ -1,21 +1,21 @@
 use mktemp::Temp;
 
-use futures_cpupool::CpuPool;
-use hyper::client::*;
-use futures::*;
-use std::process::Command;
-use tokio_process::CommandExt;
-use tokio_core::reactor::Handle;
 use config::Config;
 use error::{Error, ErrorKind};
-use papers::MergeSpec;
+use futures::*;
+use futures_cpupool::CpuPool;
 use http::*;
-use std::io::prelude::*;
+use hyper::client::*;
+use papers::MergeSpec;
 use slog::Logger;
+use std::io::prelude::*;
 use std::path::*;
+use std::process::Command;
+use tokio_core::reactor::Handle;
+use tokio_process::CommandExt;
 use utils::callbacks::*;
-use utils::s3::*;
 use utils::logging::file_logger;
+use utils::s3::*;
 
 /// This function does the whole merging process from a `MergeSpec`.
 ///
@@ -40,8 +40,7 @@ pub fn merge_documents(
     let s3_prefix = s3_dir_name();
     debug!(
         logger,
-        "Downloading PDFs for merging: {:?}",
-        &spec.assets_urls
+        "Downloading PDFs for merging: {:?}", &spec.assets_urls
     );
 
     let client = Client::configure()
@@ -177,15 +176,12 @@ pub fn merge_documents(
         let logger = logger.clone();
         handle_errors
             .then(move |_| {
-                pool.spawn_fn(move || {
-                    upload_workspace(config, &logger, &temp_dir_path, key)
-                })
+                pool.spawn_fn(move || upload_workspace(config, &logger, &temp_dir_path, key))
             })
             .map_err(move |_| {
                 let _hold = temp_dir;
             })
     };
-
 
     Box::new(tarred_workspace_uploaded.map(|_| ()).map_err(|_| ()))
 }
@@ -220,9 +216,7 @@ fn image_to_pdf(
         .arg("A4")
         .arg(&final_path)
         .output_async(handle)
-        .map_err(|err| {
-            Error::with_chain(err, "Error while converting image to pdf")
-        })
+        .map_err(|err| Error::with_chain(err, "Error while converting image to pdf"))
         .and_then(move |output| {
             let stdout_and_err = ::utils::process::whole_output(&output).expect("output is utf8");
             if output.status.success() {

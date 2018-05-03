@@ -1,5 +1,5 @@
-use rand::thread_rng;
 use rand::distributions::{Range, Sample};
+use rand::thread_rng;
 
 const PRIVATE_PORTS_MIN: u16 = 49_152;
 const PRIVATE_PORTS_MAX: u16 = 65_535;
