@@ -4,6 +4,6 @@ ENV TERM=screen
 
 WORKDIR /papers
 
-COPY target/release/papers-server .
+COPY target/release/papers .
 
-CMD ./papers-server
+CMD ./papers
