@@ -5,7 +5,7 @@
 
 ## Unreleased
 - Add Sentry for error tracking
-- Make papers-local exit with same code as the latex process
+- Make `papers local` exit with same code as the latex process
 - Send better error messages to callback endpoint
 - Implement LaTeX escaping
 - Force images in merges to have A4 aspect ratio *and* size

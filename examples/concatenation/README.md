@@ -1,6 +1,6 @@
 # PDF concatenation
 
-This example can be run with the papers-local test binary.
+This example can be run with the `papers local` test command.
 
 The Latex template uses the `pdfpages` package to include other pdfs. This way,
 papers can be used as a concatenation tool.
@@ -39,5 +39,5 @@ papers can be used as a concatenation tool.
 
 ```
 $ cd examples/concatenation
-$ papers-local
+$ papers local
 ```

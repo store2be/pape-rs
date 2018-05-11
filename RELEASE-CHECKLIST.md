@@ -45,4 +45,4 @@ $ git tag x.x.x && git push origin --tags
 * Change the release title to `x.x.x - YYYY-MM-DD`
 * Add the entries from the [changelog](CHANGELOG.md)
 * Upload the new binaries
-* Add the checksums of the binaries (`$ md5sum target/release/papers-local`)
+* Add the checksums of the binaries (`$ md5sum target/release/papers`)
