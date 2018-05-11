@@ -14,6 +14,8 @@ enum Command {
     Server,
     #[structopt(name = "local", help = "Produce PDF locally")]
     Local,
+    #[structopt(name = "version", help = "Prints the current version of Papers")]
+    Version,
     #[structopt(name = "help")]
     Help,
 }
@@ -41,6 +43,7 @@ fn main() {
             .start()
             .unwrap(),
         Some(Command::Local) => papers::local_server::render_locally(),
+        Some(Command::Version) => println!(env!("CARGO_PKG_VERSION")),
         Some(Command::Help) => Cli::clap().print_help().unwrap(),
     }
 }
