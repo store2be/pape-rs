@@ -109,7 +109,7 @@ Papers registers two custom [Tera filters](https://tera.netlify.com/docs/templat
 
 ## Local server
 
-Papers ships with the `papers-local` executable that you can use to develop your templates locally. Just put your assets in a directory, name your template `template.tex.tera`, put variables in a `variables.json` and run the binary. You will get a rendered PDF that is produced by the same code that runs in the service.
+Papers ships with the `papers local` command that you can use to develop your templates locally. Just put your assets in a directory, name your template `template.tex.tera`, put variables in a `variables.json` and run the binary. You will get a rendered PDF that is produced by the same code that runs in the service.
 
 Take a look at the [simple example](examples/simple) in the examples directory for a quick introduction.
 

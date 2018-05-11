@@ -6,4 +6,4 @@
 - `cargo install`
 - `cd examples/simple`
 - Don't forget to install the `xelatex` binary
-- `papers-local`
+- `papers local`
