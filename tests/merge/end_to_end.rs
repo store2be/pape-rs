@@ -51,10 +51,11 @@ impl server::Service for MockServer {
             }
             "/callback" => {
                 let sender = self.sender.clone();
-                let res = req.get_body_bytes()
-                    .and_then(
-                        |bytes| ok(json::from_slice::<Summary>(&bytes).expect("could not read summary")),
-                    )
+                let res = req
+                    .get_body_bytes()
+                    .and_then(|bytes| {
+                        ok(json::from_slice::<Summary>(&bytes).expect("could not read summary"))
+                    })
                     .map(|summary| {
                         if let Summary::Error { error: err, .. } = summary {
                             panic!("Error reported to callback endpoint: {}", err);

@@ -39,7 +39,8 @@ impl ResponseExt for Response {
 
     fn with_file_unsafe(self, path: &Path) -> Self {
         let mut body: Vec<u8> = Vec::new();
-        let filename = path.file_name()
+        let filename = path
+            .file_name()
             .unwrap()
             .to_string_lossy()
             .into_owned()

@@ -116,9 +116,9 @@ where
         let logger = file_logger(self.config.logger.clone(), &temp_dir_path);
 
         let mut template_path = temp_dir_path.clone();
-        template_path.push(Path::new(&document_spec
-            .output_filename
-            .replace("pdf", "tex")));
+        template_path.push(Path::new(
+            &document_spec.output_filename.replace("pdf", "tex"),
+        ));
         let max_asset_size = self.config.max_asset_size;
 
         debug!(
