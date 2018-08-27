@@ -1,6 +1,6 @@
 [package]
 name = "papers"
-version = "0.3.0"
+version = "0.3.1"
 authors = [
     "Peter Gundel <peter.gundel@store2be.com",
     "Fausto Núñez Alberro <fausto.nunez@store2be.com>",
@@ -36,6 +36,7 @@ tokio-core = "0.1.10"
 tokio-io = "0.1.4"
 tokio-process = "0.1.4"
 sentry = { git = "https://github.com/getsentry/sentry-rust", tag = "0.5.1" }
+uuid = { version = "0.6", features = ["v4"] }
 
 [dependencies.slog]
 version = "^2"

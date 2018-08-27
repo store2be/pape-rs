@@ -1,5 +1,6 @@
 use mktemp::Temp;
 
+use std::ffi::{OsStr};
 use config::Config;
 use error::{Error, ErrorKind};
 use futures::*;
@@ -16,6 +17,7 @@ use tokio_process::CommandExt;
 use utils::callbacks::*;
 use utils::logging::file_logger;
 use utils::s3::*;
+use uuid::Uuid;
 
 /// This function does the whole merging process from a `MergeSpec`.
 ///
@@ -69,7 +71,14 @@ pub fn merge_documents(
                         let filename = filename
                             .or_else(|| extract_filename_from_uri(&uri.0))
                             .unwrap_or_else(|| format!("{}.pdf", index));
-                        path.push(filename);
+
+                        let filename_path_buf = PathBuf::from(filename);
+                        let extension = filename_path_buf.extension().unwrap_or(OsStr::new("pdf"));
+
+                        // Files are saved with a UUID as a filename to avoid
+                        // errors when users upload files with the same name
+                        path.push(filename_path_buf.with_file_name(Uuid::new_v4().to_string()).with_extension(extension));
+
                         debug!(logger, "Writing file {:?} as {:?}", &uri, &path);
                         ::std::fs::File::create(&path)
                             .and_then(|mut file| file.write_all(&bytes))

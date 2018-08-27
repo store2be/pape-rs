@@ -34,6 +34,7 @@ extern crate tera;
 extern crate tokio_core;
 extern crate tokio_io;
 extern crate tokio_process;
+extern crate uuid;
 
 pub mod config;
 pub mod error;

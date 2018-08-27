@@ -5,6 +5,10 @@
 
 ## Unreleased
 
+## [0.3.1] - 2018-08-27
+- Save merge assets with V4 UUIDs as file names instead of using the original
+  file names to avoid errors when users upload files with the same name.
+
 ## [0.3.0] - 2018-05-11
 - Add Sentry for error tracking
 - Make `papers local` exit with same code as the latex process
