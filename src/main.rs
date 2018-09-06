@@ -14,7 +14,10 @@ enum Command {
     Server,
     #[structopt(name = "local", help = "Produce PDF locally")]
     Local,
-    #[structopt(name = "version", help = "Prints the current version of Papers")]
+    #[structopt(
+        name = "version",
+        help = "Prints the current version of Papers"
+    )]
     Version,
     #[structopt(name = "help")]
     Help,
@@ -22,7 +25,8 @@ enum Command {
 
 #[derive(StructOpt, Debug)]
 #[structopt(
-    name = "papers", about = "A Latex template to PDF generation web service written in Rust."
+    name = "papers",
+    about = "A Latex template to PDF generation web service written in Rust."
 )]
 struct Cli {
     #[structopt(subcommand)]

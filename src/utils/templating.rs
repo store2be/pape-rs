@@ -49,7 +49,8 @@ mod tests {
         });
         tera.add_raw_template("template", TEMPLATE)
             .expect("failed to add raw template");
-        let rendered_template = tera.render("template", &variables)
+        let rendered_template = tera
+            .render("template", &variables)
             .expect("failed to render the template");
         assert_eq!(rendered_template, EXPECTED_TEMPLATE_RESULT);
     }
@@ -78,7 +79,8 @@ mod tests {
         });
         tera.add_raw_template("template", TEMPLATE)
             .expect("failed to add raw template");
-        let rendered_template = tera.render("template", &variables)
+        let rendered_template = tera
+            .render("template", &variables)
             .expect("failed to render the template");
         assert_eq!(rendered_template, EXPECTED_TEMPLATE_RESULT);
     }

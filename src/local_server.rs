@@ -18,7 +18,8 @@ fn render(document_spec: DocumentSpec) -> ::std::process::ExitStatus {
     let mut tera = make_tera();
     tera.add_raw_template("template", &template_string)
         .expect("failed to add raw template");
-    let rendered_template = tera.render("template", &variables)
+    let rendered_template = tera
+        .render("template", &variables)
         .expect("failed to render the template");
     let mut rendered_template_file =
         ::std::fs::File::create("rendered.tex").expect("could not create rendered.tex");

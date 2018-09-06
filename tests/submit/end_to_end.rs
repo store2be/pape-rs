@@ -154,7 +154,8 @@ pub fn test_end_to_end() {
         });
 
     // Request + expectations
-    let tests = test.map_err(|err| println!("Test error: {}", err))
+    let tests = test
+        .map_err(|err| println!("Test error: {}", err))
         .and_then(|res| expectations.map(|_| res));
 
     let (status, body) = core.run(tests).expect("tests failed");
