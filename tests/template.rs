@@ -76,13 +76,14 @@ fn test_simple_template_preview() {
 
     let papers: Papers<MockServer> = Papers::new(core.remote(), &CONFIG);
     let response = papers.call(request).map_err(|_| ());
-    let (body, status) = core.run(response.and_then(|response| {
-        let status = response.status();
-        response
-            .get_body_bytes()
-            .map(move |body| (body, status))
-            .map_err(|_| ())
-    })).unwrap();
+    let (body, status) =
+        core.run(response.and_then(|response| {
+            let status = response.status();
+            response
+                .get_body_bytes()
+                .map(move |body| (body, status))
+                .map_err(|_| ())
+        })).unwrap();
     assert_eq!(status, hyper::StatusCode::Ok);
     assert_eq!(
         ::std::str::from_utf8(&body).unwrap(),

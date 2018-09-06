@@ -55,19 +55,23 @@ impl server::Service for MockServer {
                     .get_body_bytes()
                     .and_then(|bytes| {
                         ok(json::from_slice::<Summary>(&bytes).expect("could not read summary"))
-                    }).map(|summary| {
+                    })
+                    .map(|summary| {
                         if let Summary::Error { error: err, .. } = summary {
                             panic!("Error reported to callback endpoint: {}", err);
                         }
                         summary
-                    }).and_then(move |_| {
+                    })
+                    .and_then(move |_| {
                         sender
                             .send("callback ok")
                             .map_err(|_| ErrorKind::InternalServerError.into())
-                    }).and_then(|_| {
+                    })
+                    .and_then(|_| {
                         println!("Sending back response from callback endpoint");
                         ok(server::Response::new())
-                    }).map_err(|_| hyper::Error::Incomplete);
+                    })
+                    .map_err(|_| hyper::Error::Incomplete);
                 Box::new(res)
             }
             other => panic!("Unexpected request to {}", other),
@@ -94,7 +98,8 @@ pub fn test_end_to_end() {
             .bind(
                 &format!("127.0.0.1:{}", mock_port).parse().unwrap(),
                 move || Ok(MockServer::new(sender.clone())),
-            ).expect("could not bind")
+            )
+            .expect("could not bind")
             .run()
     });
 
@@ -119,7 +124,7 @@ pub fn test_end_to_end() {
             .parse()
             .unwrap(),
     ).with_body(merge_spec.into())
-    .with_header(ContentType(mime::APPLICATION_JSON));
+        .with_header(ContentType(mime::APPLICATION_JSON));
 
     let test = test_client.request(request);
 
@@ -186,7 +191,7 @@ pub fn test_rejection() {
             .parse()
             .unwrap(),
     ).with_body(merge_spec.into())
-    .with_header(ContentType(mime::APPLICATION_JSON));
+        .with_header(ContentType(mime::APPLICATION_JSON));
 
     let test = test_client.request(request);
 

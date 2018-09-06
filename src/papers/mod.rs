@@ -182,7 +182,8 @@ where
                         Renderer::new(config, handle, client).preview(document_spec, sender)
                     });
                     ok(())
-                }).and_then(move |_| receiver.map_err(|err| panic!(err)))
+                })
+                .and_then(move |_| receiver.map_err(|err| panic!(err)))
                 .flatten()
         };
 
@@ -217,7 +218,8 @@ where
                             err,
                             ErrorKind::UnprocessableEntity("Merge Spec failed".to_string()),
                         )
-                    }).and_then(|merge_spec| {
+                    })
+                    .and_then(|merge_spec| {
                         merge_spec.validate()?;
                         Ok(merge_spec)
                     }),
