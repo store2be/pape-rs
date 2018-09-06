@@ -161,7 +161,6 @@ pub fn test_end_to_end() {
 
 pub fn test_rejection() {
     let pool = CpuPool::new(3);
-    let (_sender, receiver) = mpsc::channel(30);
 
     let papers_port = toolbox::random_port();
 
@@ -195,19 +194,8 @@ pub fn test_rejection() {
 
     let test = test_client.request(request);
 
-    let expected_messages: Vec<Result<Message, ()>> = vec![].into_iter().map(Ok).collect();
-
-    let expectations = receiver
-        .take(expected_messages.len() as u64)
-        .zip(futures::stream::iter_ok(expected_messages))
-        .for_each(|(message, expected)| {
-            assert_eq!(Ok(message), expected);
-            ok(())
-        });
-
     // Request + expectations
     let tests = test.map_err(|err| panic!("Test error: {}", err))
-        .and_then(|res| expectations.map(|_| res))
         // Crash if any of the servers panicked
         .then(move |res| {
             if let Err(e) = join_papers.poll() {
