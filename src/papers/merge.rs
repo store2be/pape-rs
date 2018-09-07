@@ -1,6 +1,5 @@
 use mktemp::Temp;
 
-use std::ffi::{OsStr};
 use config::Config;
 use error::{Error, ErrorKind};
 use futures::*;
@@ -9,6 +8,7 @@ use http::*;
 use hyper::client::*;
 use papers::MergeSpec;
 use slog::Logger;
+use std::ffi::OsStr;
 use std::io::prelude::*;
 use std::path::*;
 use std::process::Command;
@@ -77,7 +77,11 @@ pub fn merge_documents(
 
                         // Files are saved with a UUID as a filename to avoid
                         // errors when users upload files with the same name
-                        path.push(filename_path_buf.with_file_name(Uuid::new_v4().to_string()).with_extension(extension));
+                        path.push(
+                            filename_path_buf
+                                .with_file_name(Uuid::new_v4().to_string())
+                                .with_extension(extension),
+                        );
 
                         debug!(logger, "Writing file {:?} as {:?}", &uri, &path);
                         ::std::fs::File::create(&path)

@@ -51,10 +51,11 @@ impl server::Service for MockServer {
             }
             "/callback" => {
                 let sender = self.sender.clone();
-                let res = req.get_body_bytes()
-                    .and_then(
-                        |bytes| ok(json::from_slice::<Summary>(&bytes).expect("could not read summary")),
-                    )
+                let res = req
+                    .get_body_bytes()
+                    .and_then(|bytes| {
+                        ok(json::from_slice::<Summary>(&bytes).expect("could not read summary"))
+                    })
                     .map(|summary| {
                         if let Summary::Error { error: err, .. } = summary {
                             panic!("Error reported to callback endpoint: {}", err);
@@ -156,4 +157,55 @@ pub fn test_end_to_end() {
 
     let res = core.run(tests).expect("tests failed");
     assert_eq!(res.status(), hyper::StatusCode::Ok);
+}
+
+pub fn test_rejection() {
+    let pool = CpuPool::new(3);
+
+    let papers_port = toolbox::random_port();
+
+    let mut join_papers = pool.spawn_fn(move || {
+        papers::server::Server::new()
+            .with_port(i32::from(papers_port))
+            .start()
+    });
+
+    ::std::thread::sleep(::std::time::Duration::from_millis(400));
+
+    let mut core = tokio_core::reactor::Core::new().expect("could not create reactor");
+
+    let handle = core.handle();
+    let test_client = Client::new(&handle.clone());
+
+    let merge_spec = format!(
+        r#"{{
+        "assets_urls": [],
+        "callback_url": "http://127.0.0.1:8888/callback"
+    }}"#,
+    );
+
+    let request: Request<hyper::Body> = Request::new(
+        hyper::Method::Post,
+        format!("http://127.0.0.1:{}/merge", papers_port)
+            .parse()
+            .unwrap(),
+    ).with_body(merge_spec.into())
+        .with_header(ContentType(mime::APPLICATION_JSON));
+
+    let test = test_client.request(request);
+
+    // Request + expectations
+    let tests = test.map_err(|err| panic!("Test error: {}", err))
+        // Crash if any of the servers panicked
+        .then(move |res| {
+            if let Err(e) = join_papers.poll() {
+                panic!("Papers server panicked: {}", e)
+            }
+
+            res
+        });
+
+    let res = core.run(tests).expect("tests failed");
+    println!("{:?}", res);
+    assert_eq!(res.status(), hyper::StatusCode::UnprocessableEntity);
 }

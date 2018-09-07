@@ -212,12 +212,17 @@ where
         let body = req.get_body_bytes();
         let merge_spec = body.and_then(|body| {
             result(
-                serde_json::from_slice::<MergeSpec>(body.as_slice()).map_err(|err| {
-                    Error::with_chain(
-                        err,
-                        ErrorKind::UnprocessableEntity("Merge Spec failed".to_string()),
-                    )
-                }),
+                serde_json::from_slice::<MergeSpec>(body.as_slice())
+                    .map_err(|err| {
+                        Error::with_chain(
+                            err,
+                            ErrorKind::UnprocessableEntity("Merge Spec failed".to_string()),
+                        )
+                    })
+                    .and_then(|merge_spec| {
+                        merge_spec.validate()?;
+                        Ok(merge_spec)
+                    }),
             )
         });
 
