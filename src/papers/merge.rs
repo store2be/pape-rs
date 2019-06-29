@@ -1,202 +1,191 @@
-use mktemp::Temp;
-
-use config::Config;
-use error::{Error, ErrorKind};
-use futures::*;
-use futures_cpupool::CpuPool;
-use http::*;
-use hyper::client::*;
-use papers::MergeSpec;
-use slog::Logger;
-use std::ffi::OsStr;
-use std::io::prelude::*;
+use crate::papers::{MergeSpec, Workspace};
+use crate::prelude::*;
+use futures::compat::*;
+use futures::{StreamExt, TryFutureExt};
+use slog::{debug, error, Logger};
 use std::path::*;
 use std::process::Command;
-use tokio_core::reactor::Handle;
 use tokio_process::CommandExt;
-use utils::callbacks::*;
-use utils::logging::file_logger;
-use utils::s3::*;
-use uuid::Uuid;
 
-/// This function does the whole merging process from a `MergeSpec`.
-///
-/// It:
-///
-/// - Downloads the documents to merge
-/// - Converts those that are not PDFs to PDF
-/// - Merges the PDFs
-/// - Uploads the result to S3
-/// - Reports to the `callback_url` from the `MergeSpec` with the error or presigned url of the
-///   generated document.
-/// - Uploads the debugging output to S3 as a tar file.
-pub fn merge_documents(
-    config: &'static Config,
-    handle: &Handle,
-    spec: MergeSpec,
-) -> Box<Future<Item = (), Error = ()>> {
-    let pool = CpuPool::new(3);
-    let temp_dir = Temp::new_dir().expect("Could not create a temporary directory");
-    let max_asset_size = config.max_asset_size;
-    let logger = file_logger(config.logger.clone(), temp_dir.as_ref());
-    let s3_prefix = s3_dir_name();
-    debug!(
-        logger,
-        "Downloading PDFs for merging: {:?}", &spec.assets_urls
-    );
+pub struct Merger {
+    /// The blueprint for the merged document.
+    merge_spec: MergeSpec,
+    /// The path of the merged file.
+    output_path: PathBuf,
+    /// See the docs for [`Workspace`](crate::papers::Workspace).
+    workspace: Workspace,
+}
 
-    let client = Client::configure()
-        .connector(https_connector(handle))
-        .build(handle);
+impl Merger {
+    pub fn new(config: Arc<Config>, merge_spec: MergeSpec) -> Result<Self, failure::Error> {
+        let logger = config.logger.clone();
+        let workspace = Workspace::new(logger, config)?;
 
-    let assets_downloads = {
-        let logger = logger.clone();
-        let temp_dir = temp_dir.to_path_buf();
-        let client = client.clone();
-        spec.assets_urls
-            .into_iter()
-            .enumerate()
-            .map(move |(index, uri)| {
-                let mut path = temp_dir.to_path_buf();
-                let logger = logger.clone();
-                client
-                    .clone()
-                    .get_follow_redirect(&uri.0)
-                    .and_then(move |res| {
-                        let filename = res.filename();
-                        res.get_body_bytes_with_limit(max_asset_size)
-                            .map(|bytes| (bytes, filename))
-                    })
-                    .and_then(move |(bytes, filename)| {
-                        let filename = filename
-                            .or_else(|| extract_filename_from_uri(&uri.0))
-                            .unwrap_or_else(|| format!("{}.pdf", index));
+        let output_path = workspace.temp_dir_path().join(&merge_spec.output_filename);
 
-                        let filename_path_buf = PathBuf::from(filename);
-                        let extension = filename_path_buf.extension().unwrap_or(OsStr::new("pdf"));
+        Ok(Merger {
+            merge_spec,
+            output_path,
+            workspace,
+        })
+    }
 
-                        // Files are saved with a UUID as a filename to avoid
-                        // errors when users upload files with the same name
-                        path.push(
-                            filename_path_buf
-                                .with_file_name(Uuid::new_v4().to_string())
-                                .with_extension(extension),
-                        );
+    /// This function does the whole merging process from a
+    /// [`MergeSpec`](crate::papers::MergeSpec).
+    ///
+    /// It:
+    ///
+    /// - Downloads the documents to merge
+    /// - Converts those that are not PDFs to PDF
+    /// - Merges the PDFs
+    /// - Uploads the result to S3
+    /// - Reports to the `callback_url` from the `MergeSpec` with the error or presigned url of
+    /// the generated document.
+    /// - Uploads the debugging output to S3 as a tar file.
+    ///
+    /// This method takes ownership because it is meant to be used to create futures to be
+    /// spawned in the background.
+    pub async fn merge_documents(self) -> Result<(), ()> {
+        self.merge_documents_inner()
+            .or_else(|err| self.report_failure(err))
+            .await
+            .ok();
 
-                        debug!(logger, "Writing file {:?} as {:?}", &uri, &path);
-                        ::std::fs::File::create(&path)
-                            .and_then(|mut file| file.write_all(&bytes))
-                            .map(|_| path)
-                            .map_err(|e| Error::with_chain(e, "Error writing PDF"))
-                    })
+        self.workspace
+            .upload_workspace()
+            .await
+            .map_err(|err| {
+                error!(
+                    self.workspace.logger(),
+                    "Error uploading workspace.tar: {:?}.", err
+                )
             })
-    };
+            .ok();
 
-    let paths = future::join_all(assets_downloads);
+        Ok(())
+    }
 
-    // Convert non-PDF files to PDF with imagemagick
-    let converted_paths = {
-        let handle = handle.clone();
-        let logger = logger.clone();
-        paths.and_then(move |paths| {
-            let futures = paths.into_iter().map(move |path| {
-                let logger = logger.clone();
+    async fn merge_documents_inner(&self) -> Result<(), failure::Error> {
+        // Download
+        let asset_paths = self
+            .download_assets()
+            .await
+            .context("Error downloading assets.")?;
+
+        // Convert
+        let converted_paths = self
+            .convert_assets_to_pdf(asset_paths)
+            .await
+            .context("Error converting asset file to PDF.")?;
+
+        // Merge
+        self.merge_pdf(converted_paths)
+            .await
+            .context("Error merging the PDFs.")?;
+
+        // Upload the merged PDF
+        let presigned_url = self
+            .workspace
+            .upload_to_s3(self.output_path.to_owned())
+            .await?;
+
+        // Report success
+        let callback_url = self.merge_spec.callback_url();
+
+        self.workspace
+            .report_success(presigned_url, &callback_url)
+            .await
+    }
+
+    /// Convert non-PDF files to PDF with imagemagick, and returns the path of the converted
+    /// PDFs.
+    async fn convert_assets_to_pdf(
+        &self,
+        asset_paths: Vec<PathBuf>,
+    ) -> Result<Vec<PathBuf>, failure::Error> {
+        let mut futures = futures::stream::FuturesUnordered::new();
+
+        for path in asset_paths.into_iter() {
+            let logger = self.workspace.logger().clone();
+            let to_pdf = async move |path: PathBuf| -> Result<PathBuf, failure::Error> {
                 match path.extension() {
-                    Some(extension) if extension == "pdf" => Box::new(future::ok(path.clone())),
-                    None => Box::new(future::ok(path.clone())),
-                    Some(_) => image_to_pdf(logger, &handle, &path.clone()),
+                    Some(extension) if extension == "pdf" => return Ok(path),
+                    None => Ok(path),
+                    Some(_) => image_to_pdf(logger, path.clone()).await,
                 }
-            });
-            future::join_all(futures)
-        })
-    };
+            };
+            futures.push(to_pdf(path));
+        }
 
-    let merged = {
-        let output_filename = spec.output_filename.clone();
-        let handle = handle.clone();
-        let temp_dir = temp_dir.to_path_buf();
-        converted_paths.and_then(move |paths| {
-            Command::new("pdfunite")
-                .current_dir(temp_dir)
-                .args(paths)
-                .arg(output_filename)
-                .output_async(&handle)
-                .map_err(|err| Error::with_chain(err, "Error merging PDFs"))
-        })
-    };
+        let converted_paths: Vec<Result<_, _>> = futures.collect().await;
+        converted_paths.into_iter().collect()
+    }
 
-    let unwrapped = {
-        let mut output_path = temp_dir.to_path_buf();
-        output_path.push(&spec.output_filename);
-        let logger = logger.clone();
-        merged.and_then(move |output| {
-            let stdout_and_err = ::utils::process::whole_output(&output).expect("output is utf8");
-            if output.status.success() {
-                debug!(logger, "pdfunite output: {}", stdout_and_err);
-                Ok(output_path)
-            } else {
-                Err(ErrorKind::MergeFailed(stdout_and_err).into())
-            }
-        })
-    };
+    /// Download the assets to merge, and returns the paths to the downloaded files, preserving
+    /// the order of the assets.
+    ///
+    /// It is NOT guaranteed that the files will have the same filenames as in the provided
+    /// URLs.
+    async fn download_assets(&self) -> Result<Vec<PathBuf>, failure::Error> {
+        debug!(
+            self.workspace.logger(),
+            "Downloading PDFs for merging: {:?}.",
+            &self.merge_spec.asset_urls().collect::<Vec<_>>()
+        );
 
-    let presigned_url = {
-        let logger = logger.clone();
-        let s3_prefix = s3_prefix.clone();
-        let pool = pool.clone();
-        unwrapped.and_then(move |output_path| {
-            let filename = output_path
-                .file_name()
-                .unwrap()
-                .to_string_lossy()
-                .into_owned();
-            let key = format!("{}/{}", &s3_prefix, filename);
-            upload_document(config, logger, &pool, output_path, key)
-        })
-    };
+        let mut asset_downloads = Vec::new();
 
-    let callback_response = {
-        let callback_url = spec.callback_url.clone();
-        let client = client.clone();
-        let s3_prefix = s3_prefix.clone();
-        let logger = logger.clone();
-        presigned_url.and_then(move |presigned_url| {
-            report_success(
-                config,
-                &logger,
-                client,
-                callback_url.0,
-                s3_prefix,
-                presigned_url,
-            )
-        })
-    };
+        for uri in self.merge_spec.asset_urls() {
+            asset_downloads.push(
+                self.workspace
+                    .download_file_with_prefix(uri, uuid::Uuid::new_v4().to_string()),
+            );
+        }
 
-    // Report errors to the callback url
-    let handle_errors = {
-        let callback_url = spec.callback_url.clone();
-        let logger = logger.clone();
-        let client = client.clone();
-        let s3_prefix = s3_prefix.clone();
-        callback_response.or_else(move |error| {
-            report_failure(&logger, client, &error, s3_prefix, callback_url.0)
-        })
-    };
+        let paths: Vec<Result<PathBuf, _>> = futures::future::join_all(asset_downloads).await;
+        paths.into_iter().collect()
+    }
 
-    let tarred_workspace_uploaded = {
-        let key = format!("{}/{}", &s3_prefix, "workspace.tar");
-        let temp_dir_path = temp_dir.to_path_buf();
-        let logger = logger.clone();
-        handle_errors
-            .then(move |_| {
-                pool.spawn_fn(move || upload_workspace(config, &logger, &temp_dir_path, key))
-            })
-            .map_err(move |_| {
-                let _hold = temp_dir;
-            })
-    };
+    async fn report_failure(&self, error: failure::Error) -> Result<(), ()> {
+        error!(
+            self.workspace.logger(),
+            "Error merging documents: {:?}.", error
+        );
+        let callback_url = self.merge_spec.callback_url();
+        match self.workspace.report_failure(error, callback_url).await {
+            Ok(()) => (),
+            Err(err) => error!(self.workspace.logger(), "Documents merge failed: {:?}.", err),
+        }
 
-    Box::new(tarred_workspace_uploaded.map(|_| ()).map_err(|_| ()))
+        Ok(())
+    }
+
+    async fn merge_pdf(&self, converted_paths: Vec<PathBuf>) -> Result<(), failure::Error> {
+        let output = Command::new("pdfunite")
+            .current_dir(&self.workspace.temp_dir_path())
+            .args(converted_paths)
+            .arg(&self.merge_spec.output_filename)
+            .output_async()
+            .compat()
+            .await
+            .context("Error merging PDFs")?;
+
+        let stdout_and_err = crate::utils::process::whole_output(&output).expect("output is utf8");
+
+        if output.status.success() {
+            debug!(
+                self.workspace.logger(),
+                "pdfunite output: {}.", stdout_and_err
+            );
+        } else {
+            return Err(format_err!(
+                "Merge failed. pdfunite output:\n{}",
+                stdout_and_err
+            ));
+        };
+
+        Ok(())
+    }
 }
 
 /// Convert an image to an A4 pdf using imagemagick's `convert` command.
@@ -204,15 +193,14 @@ pub fn merge_documents(
 /// Sample command:
 ///
 /// `convert sc.png -resize 1190x1684 -gravity center -background white -extent 1190x1684 sc.pdf`
-fn image_to_pdf(
+async fn image_to_pdf(
     logger: Logger,
-    handle: &Handle,
-    original_file_path: &Path,
-) -> Box<Future<Item = PathBuf, Error = Error>> {
+    original_file_path: PathBuf,
+) -> Result<PathBuf, failure::Error> {
     // "/tmp/something.jpeg" -> "something"
     let stem = original_file_path.file_stem().expect("Invalid path");
     let final_path = original_file_path.with_file_name(format!("{}.pdf", stem.to_string_lossy()));
-    let work = Command::new("convert")
+    let output = Command::new("convert")
         .current_dir(&original_file_path.parent().expect("Invalid path"))
         .arg(original_file_path)
         .arg("-resize")
@@ -228,17 +216,18 @@ fn image_to_pdf(
         .arg("-page")
         .arg("A4")
         .arg(&final_path)
-        .output_async(handle)
-        .map_err(|err| Error::with_chain(err, "Error while converting image to pdf"))
-        .and_then(move |output| {
-            let stdout_and_err = ::utils::process::whole_output(&output).expect("output is utf8");
-            if output.status.success() {
-                debug!(logger, "ImageMagick output {}", stdout_and_err);
-                Ok(final_path)
-            } else {
-                Err(ErrorKind::MergeFailed(stdout_and_err).into())
-            }
-        });
+        .output_async()
+        .compat()
+        .await
+        .context("Error while converting image to pdf")?;
 
-    Box::new(work)
+    let stdout_and_err =
+        crate::utils::process::whole_output(&output).context("convert output was not utf8")?;
+
+    if output.status.success() {
+        debug!(logger, "ImageMagick output {}", stdout_and_err);
+        Ok(final_path)
+    } else {
+        Err(format_err!("Merge failed. Output:\n{}", stdout_and_err))
+    }
 }

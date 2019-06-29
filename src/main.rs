@@ -1,11 +1,7 @@
-// #![deny(warnings)]
+#![deny(warnings)]
 
-extern crate papers;
-extern crate structopt;
-#[macro_use]
-extern crate structopt_derive;
-extern crate sentry;
-
+use dotenv::dotenv;
+use std::sync::Arc;
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
@@ -22,28 +18,33 @@ enum Command {
 
 #[derive(StructOpt, Debug)]
 #[structopt(
-    name = "papers", about = "A Latex template to PDF generation web service written in Rust."
+    name = "papers",
+    about = "A Latex template to PDF generation web service written in Rust."
 )]
 struct Cli {
     #[structopt(subcommand)]
     command: Option<Command>,
 }
 
-fn main() {
-    let port = ::std::env::var("PAPERS_PORT").unwrap_or_else(|_| "8080".to_string());
+fn main() -> Result<(), failure::Error> {
+    dotenv().ok();
 
-    let sentry_dsn = ::std::env::var("SENTRY_DSN").unwrap_or_else(|_| "".to_string());
+    let port = std::env::var("PAPERS_PORT").unwrap_or_else(|_| "8080".to_string());
+    let port: std::net::SocketAddr = ([0, 0, 0, 0], port.parse()?).into();
+
+    let sentry_dsn = std::env::var("SENTRY_DSN").unwrap_or_else(|_| "".to_string());
     let _guard = sentry::init(sentry_dsn);
     sentry::integrations::panic::register_panic_handler();
 
     let opts = Cli::from_args();
     match opts.command {
-        Some(Command::Server) | None => papers::server::Server::new()
-            .with_port(port.parse().unwrap())
-            .start()
-            .unwrap(),
+        Some(Command::Server) | None => {
+            papers::app(Arc::new(papers::Config::from_env())).serve(port)?;
+        }
         Some(Command::Local) => papers::local_server::render_locally(),
         Some(Command::Version) => println!(env!("CARGO_PKG_VERSION")),
         Some(Command::Help) => Cli::clap().print_help().unwrap(),
     }
+
+    Ok(())
 }

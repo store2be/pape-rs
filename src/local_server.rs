@@ -1,15 +1,15 @@
+use crate::latex;
+use crate::prelude::*;
+use crate::utils::templating::make_tera;
 use serde_json;
+use serde_json::json;
 use std::fs::File;
 use std::io::prelude::*;
 
-use latex;
-use prelude::*;
-use utils::templating::make_tera;
-
-fn render(document_spec: DocumentSpec) -> ::std::process::ExitStatus {
+fn render(document_spec: DocumentSpec) -> std::process::ExitStatus {
     let DocumentSpec { variables, .. } = document_spec;
     let variables = latex::escape_tex(variables);
-    let template_string = ::std::fs::File::open("template.tex.tera")
+    let template_string = std::fs::File::open("template.tex.tera")
         .expect("could not open template.tex.tera")
         .bytes()
         .collect::<Result<Vec<u8>, _>>()
@@ -22,11 +22,11 @@ fn render(document_spec: DocumentSpec) -> ::std::process::ExitStatus {
         .render("template", &variables)
         .expect("failed to render the template");
     let mut rendered_template_file =
-        ::std::fs::File::create("rendered.tex").expect("could not create rendered.tex");
+        std::fs::File::create("rendered.tex").expect("could not create rendered.tex");
     rendered_template_file
         .write_all(rendered_template.as_bytes())
         .unwrap();
-    let outcome = ::std::process::Command::new("xelatex")
+    let outcome = std::process::Command::new("xelatex")
         .arg("-interaction=nonstopmode")
         .arg("-file-line-error")
         .arg("-shell-restricted")
@@ -54,9 +54,9 @@ pub fn render_locally() {
         output_filename: "unreachable".to_string(),
         template_url: PapersUri("unreachable".parse().unwrap()),
         variables: variables,
-        no_escape_tex: ::std::default::Default::default(),
+        no_escape_tex: std::default::Default::default(),
     };
 
     let exit_status = render(document_spec);
-    ::std::process::exit(exit_status.code().unwrap_or(1));
+    std::process::exit(exit_status.code().unwrap_or(1));
 }

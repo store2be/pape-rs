@@ -18,11 +18,9 @@ impl FromStr for Bytes {
     type Err = ();
 
     fn from_str(src: &str) -> Result<Bytes, ()> {
-        lazy_static! {
-            static ref HUMAN_READABLE: Regex = Regex::new(r"^\s*(\d+)([GKM])?\s*$").unwrap();
-        }
+        let human_readable: Regex = Regex::new(r"^\s*(\d+)([GKM])?\s*$").unwrap();
 
-        match HUMAN_READABLE.captures(src) {
+        match human_readable.captures(src) {
             Some(captures) => {
                 let quantity: u32 = captures.get(1).unwrap().as_str().parse().unwrap();
                 match captures.get(2) {
@@ -38,7 +36,7 @@ impl FromStr for Bytes {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use quickcheck::{Arbitrary, Gen};
+    use quickcheck::{quickcheck, Arbitrary, Gen};
 
     #[test]
     fn test_bytes_from_str() {

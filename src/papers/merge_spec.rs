@@ -1,12 +1,13 @@
+use crate::papers::uri::PapersUri;
+use crate::prelude::*;
 use chrono::Utc;
-use error::{Error, ErrorKind};
-use papers::uri::PapersUri;
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct MergeSpec {
     #[serde(default = "default_assets")]
-    pub assets_urls: Vec<PapersUri>,
-    pub callback_url: PapersUri,
+    assets_urls: Vec<PapersUri>,
+    callback_url: PapersUri,
     #[serde(default = "default_output_filename")]
     pub output_filename: String,
 }
@@ -20,29 +21,37 @@ fn default_output_filename() -> String {
 }
 
 impl MergeSpec {
+    pub fn asset_urls(&self) -> impl std::iter::Iterator<Item = &hyper::Uri> {
+        self.assets_urls.iter().map(|uri| &uri.0)
+    }
+
+    pub fn callback_url(&self) -> String {
+        self.callback_url.0.to_string()
+    }
+
     /// Validate that the specification is consistent, and that it can be expected to succeed.
     ///
     /// The error is intended for consumption by the client of the service.
-    pub fn validate(&self) -> Result<(), Error> {
+    pub fn validate(&self) -> Result<(), EndpointError> {
         // Trying to merge 0 documents will not succeed
         if self.assets_urls.is_empty() {
-            return Err(MergeSpec::validation_error());
+            return Err(self.assets_count_error());
         }
 
         Ok(())
     }
 
-    fn validation_error() -> Error {
-        Error::from_kind(ErrorKind::UnprocessableEntity(
-            "Cannot merge with an empty asset_urls array.".to_owned(),
-        ))
+    fn assets_count_error(&self) -> EndpointError {
+        EndpointError::UnprocessableEntity {
+            cause: format_err!("Cannot merge with an empty asset_urls array."),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::from_str;
+    use serde_json::{from_str, json};
 
     #[test]
     fn it_validates_uris() {
@@ -55,9 +64,6 @@ mod tests {
 
     #[test]
     fn merge_spec_validate_empty_asset_urls() {
-        use error::{Error, ErrorKind};
-        use serde_json;
-
         let wrong_spec_json = json!({
             "assets_urls": [],
             "callback_url": "https://example.com/callback",
@@ -65,8 +71,11 @@ mod tests {
 
         let serialized: MergeSpec = serde_json::from_value(wrong_spec_json).unwrap();
 
-        if let Err(Error(ErrorKind::UnprocessableEntity(msg), _)) = serialized.validate() {
-            assert_eq!(msg, "Cannot merge with an empty asset_urls array.");
+        if let Err(EndpointError::UnprocessableEntity { cause: msg }) = serialized.validate() {
+            assert_eq!(
+                msg.to_string(),
+                "Cannot merge with an empty asset_urls array."
+            );
             return;
         }
 
