@@ -105,12 +105,12 @@ impl Renderer {
 
         // Report to the callback URL
         let callback_url = self.document_spec.callback_url();
-        let presigned_url = self
+        self
             .workspace
             .report_success(presigned_url, &callback_url)
             .await?;
 
-        Ok(presigned_url)
+        Ok(())
     }
 
     fn template_path(&self) -> &std::path::Path {
