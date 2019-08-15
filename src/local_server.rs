@@ -53,7 +53,7 @@ pub fn render_locally() {
         callback_url: PapersUri("unreachable".parse().unwrap()),
         output_filename: "unreachable".to_string(),
         template_url: PapersUri("unreachable".parse().unwrap()),
-        variables: variables,
+        variables,
         no_escape_tex: std::default::Default::default(),
     };
 

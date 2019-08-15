@@ -15,8 +15,8 @@ pub fn s3_dir_name() -> String {
 }
 
 /// Posts the file to the given key in S3 with the default S3 configuration.
-pub async fn post_to_s3<'a>(
-    config: &'a Config,
+pub async fn post_to_s3(
+    config: &Config,
     path: PathBuf,
     key: String,
 ) -> Result<(), failure::Error> {
@@ -48,7 +48,7 @@ pub async fn post_to_s3<'a>(
 /// Gets a presigned url for the specified key in the bucket specified in the configuration.
 ///
 /// This does not perform any request.
-pub fn get_presigned_url<'a>(config: &'a Config, key: String) -> String {
+pub fn get_presigned_url(config: &Config, key: String) -> String {
     use rusoto_s3::util::*;
     use rusoto_s3::GetObjectRequest;
 
@@ -78,7 +78,6 @@ pub async fn upload_workspace<'a>(
     let mut tarred_workspace: Vec<u8> = Vec::new();
 
     let dir_name: PathBuf = workspace
-        .clone()
         .components()
         .last()
         .unwrap()
@@ -108,8 +107,8 @@ pub async fn upload_workspace<'a>(
 }
 
 /// Takes the path to a generated pdf and a key, returns the presigned url to the uploaded document
-pub async fn upload_document<'a>(
-    config: &'a Config,
+pub async fn upload_document(
+    config: &Config,
     logger: Logger,
     local_path: PathBuf,
     key: String,

@@ -43,13 +43,13 @@ use futures::compat::*;
     // Running count of the downloaded file's size in bytes.
     let mut bytes_size: u32 = 0;
 
-    while let Some(mut chunk) = body.next().await.transpose()? {
+    while let Some(chunk) = body.next().await.transpose()? {
         bytes_size += chunk.len() as u32;
         if bytes_size > size_limit {
             return Err(failure::err_msg("File exceeded max asset size"));
         }
 
-        futures01::future::poll_fn(|| file.poll_write(&mut chunk))
+        futures01::future::poll_fn(|| file.poll_write(&chunk))
             .compat()
             .await?;
     }

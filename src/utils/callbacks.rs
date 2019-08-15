@@ -7,9 +7,9 @@ use slog::{debug, error, info, Logger};
 
 /// This reports to the provided callback url with the presigned URL of the generated PDF and the
 /// location of the debugging output. It returns the response from the callback url as a future.
-pub async fn report_success<'a>(
+pub async fn report_success(
     logger: Logger,
-    callback_url: &'a str,
+    callback_url: &str,
     s3_prefix: String,
     presigned_url: String,
 ) -> Result<(), failure::Error> {
@@ -49,11 +49,11 @@ pub async fn report_success<'a>(
 /// When an error occurs during the generation process, it is reported with this function. It calls
 /// the `callback_url` from the document spec, posting a `Summary` object with the error and the
 /// key where the debug output can be found.
-pub async fn report_failure<'a>(
+pub async fn report_failure(
     logger: Logger,
     error: failure::Error,
     s3_prefix: String,
-    callback_url: &'a str,
+    callback_url: &str,
 ) -> Result<(), failure::Error> {
     let client = Client::new();
 

@@ -111,7 +111,7 @@ impl Merger {
             let logger = self.workspace.logger().clone();
             let to_pdf = move |path: PathBuf| -> Pin<Box<dyn Future<Output=Result<PathBuf, failure::Error>> + Send>> {
                 match path.extension() {
-                    Some(extension) if extension == "pdf" => return futures::future::ready(Ok(path)).boxed(),
+                    Some(extension) if extension == "pdf" => futures::future::ready(Ok(path)).boxed(),
                     None => futures::future::ready(Ok(path)).boxed(),
                     Some(_) => image_to_pdf(logger, path.clone()).boxed(),
                 }

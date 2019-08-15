@@ -8,7 +8,7 @@ use tokio_io::AsyncWrite;
 use tokio_process::CommandExt;
 
 /// The name of the downloaded template inside our Tera instance.
-const TEMPLATE_NAME: &'static str = "template";
+const TEMPLATE_NAME: &str = "template";
 
 pub struct Renderer {
     /// The manifest for the document to render.
