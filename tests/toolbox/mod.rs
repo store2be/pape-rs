@@ -3,8 +3,7 @@
 //! Private utilities for testing Papers.
 
 use futures::channel::mpsc::Sender;
-use rand::distributions::{Range, Sample};
-use rand::thread_rng;
+use rand::{thread_rng, Rng};
 use std::sync::Arc;
 use warp::{filters::BoxedFilter, Filter};
 
@@ -12,7 +11,7 @@ const PRIVATE_PORTS_MIN: u16 = 49_152;
 const PRIVATE_PORTS_MAX: u16 = 65_535;
 
 fn random_port() -> u16 {
-    Range::new(PRIVATE_PORTS_MIN, PRIVATE_PORTS_MAX).sample(&mut thread_rng())
+    thread_rng().gen_range(PRIVATE_PORTS_MIN, PRIVATE_PORTS_MAX)
 }
 
 pub struct FilesServer {
