@@ -3,8 +3,7 @@ use crate::prelude::*;
 use futures::{compat::*, StreamExt};
 use slog::{debug, error};
 use std::process::Command;
-use tokio_fs::File;
-use tokio_io::AsyncWrite;
+use tokio::{fs::File, io::AsyncWrite};
 use tokio_process::CommandExt;
 
 /// The name of the downloaded template inside our Tera instance.

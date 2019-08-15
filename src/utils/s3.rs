@@ -4,8 +4,7 @@ use rusoto_s3::S3;
 use slog::{debug, Logger};
 use std::default::Default;
 use std::path::PathBuf;
-use tokio_fs::File;
-use tokio_io::AsyncWrite;
+use tokio::{fs::File, io::AsyncWrite};
 
 use crate::prelude::*;
 
@@ -27,7 +26,7 @@ pub async fn post_to_s3(
     debug!(config.logger, "Uploading {:?} to {:?}.", path, key);
     let file = File::open(path).compat().await?;
     let bytes = Vec::new();
-    let (_, bytes) = tokio_io::io::read_to_end(file, bytes).compat().await?;
+    let (_, bytes) = tokio::io::read_to_end(file, bytes).compat().await?;
 
     let request = rusoto_s3::PutObjectRequest {
         body: Some(bytes.into()),

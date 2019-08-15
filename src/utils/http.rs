@@ -34,8 +34,7 @@ pub(crate) async fn client_response_body_to_file(
 ) -> Result<(), failure::Error> {
 use futures::compat::*;
     use futures::stream::StreamExt;
-    use tokio_fs::File;
-    use tokio_io::AsyncWrite;
+    use tokio::{fs::File, io::AsyncWrite};
 
     let mut file = File::create(path).compat().await?;
     let mut body = response.body_mut().compat();
