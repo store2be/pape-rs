@@ -2,11 +2,11 @@
 
 //! Private utilities for testing Papers.
 
-use futures::future::FutureExt;
+use futures::channel::mpsc::Sender;
 use rand::distributions::{Range, Sample};
 use rand::thread_rng;
 use std::sync::Arc;
-use tide::middleware::{Middleware, Next};
+use warp::{filters::BoxedFilter, Filter};
 
 const PRIVATE_PORTS_MIN: u16 = 49_152;
 const PRIVATE_PORTS_MAX: u16 = 65_535;
@@ -60,9 +60,7 @@ impl TestSetup {
         let config_handle = config.clone();
 
         let papers_thread_handle = std::thread::spawn(move || {
-            papers::app(config_handle)
-                .serve(("0.0.0.0", papers_port))
-                .expect("papers server bind");
+            warp::serve(papers::app(config_handle)).run(([0, 0, 0, 0], papers_port))
         });
 
         let files_server = if serve_files {
@@ -71,14 +69,10 @@ impl TestSetup {
             let dir = temp_dir.to_path_buf();
             let (sender, receiver) = futures::channel::mpsc::channel(20);
             let handle = std::thread::spawn(move || {
-                let mut app = tide::App::new(());
-                let fs = tide_static_files::StaticFiles::new(dir.to_str().expect("dir is utf-8"));
-                let reporter = ReporterMiddleware {
-                    sender: std::sync::Mutex::new(sender),
-                };
-                app.middleware(reporter);
-                app.at("*path").get(fs);
-                app.serve(("0.0.0.0", port)).expect("files server bind");
+                let report = reporter(sender);
+                let dir = dir.to_str().expect("dir is utf-8");
+                let fs = warp::filters::fs::dir(dir.to_owned());
+                warp::serve(report().and(fs)).run(([0, 0, 0, 0], port));
             });
             Some(FilesServer {
                 temp_dir,
@@ -94,13 +88,8 @@ impl TestSetup {
             let port = random_port();
             let (sender, receiver) = futures::channel::mpsc::channel(20);
             let handle = std::thread::spawn(move || {
-                let mut app = tide::App::new(());
-                let reporter = ReporterMiddleware {
-                    sender: std::sync::Mutex::new(sender),
-                };
-                app.middleware(reporter);
-                app.at("*").post(async move |_ctx: tide::Context<()>| ());
-                app.serve(("0.0.0.0", port)).unwrap();
+                let report = reporter(sender);
+                warp::serve(report().map(|| "OK")).run(([0, 0, 0, 0], port));
             });
             Some(CallbackServer {
                 _thread: handle,
@@ -246,31 +235,23 @@ impl std::default::Default for TestSetupConfig {
     }
 }
 
-pub struct ReporterMiddleware {
-    sender: std::sync::Mutex<futures::channel::mpsc::Sender<(http::method::Method, String)>>,
-}
-
-impl ReporterMiddleware {
-    async fn async_handle<'a>(
-        &'a self,
-        context: tide::Context<()>,
-        next: Next<'a, ()>,
-    ) -> http::Response<http_service::Body> {
-        self.sender
-            .lock()
-            .expect("acquiring sender lock")
-            .try_send((context.method().to_owned(), context.uri().path().to_owned()))
-            .expect("sending request in test context");
-        next.run(context).await
-    }
-}
-
-impl Middleware<()> for ReporterMiddleware {
-    fn handle<'a>(
-        &'a self,
-        context: tide::Context<()>,
-        next: Next<'a, ()>,
-    ) -> futures::future::BoxFuture<'a, http::Response<http_service::Body>> {
-        self.async_handle(context, next).boxed()
+fn reporter(sender: Sender<(http::Method, String)>) -> impl Fn() -> BoxedFilter<()> {
+    let sender = Arc::new(std::sync::Mutex::new(sender));
+    move || {
+        let sender = sender.clone();
+        warp::filters::method::method()
+            .and(warp::filters::path::full())
+            .map(
+                move |method: http::Method, full_path: warp::filters::path::FullPath| {
+                    sender
+                        .clone()
+                        .lock()
+                        .expect("acquiring sender lock")
+                        .try_send((method.to_owned(), full_path.as_str().to_owned()))
+                        .expect("sending request in test context");
+                },
+            )
+            .untuple_one()
+            .boxed()
     }
 }

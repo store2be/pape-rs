@@ -1,8 +1,10 @@
 use crate::papers::{MergeSpec, Workspace};
 use crate::prelude::*;
+use std::future::Future;
 use futures::compat::*;
-use futures::{StreamExt, TryFutureExt};
+use futures::{FutureExt, StreamExt, TryFutureExt};
 use slog::{debug, error, Logger};
+use std::pin::Pin;
 use std::path::*;
 use std::process::Command;
 use tokio_process::CommandExt;
@@ -107,11 +109,11 @@ impl Merger {
 
         for path in asset_paths.into_iter() {
             let logger = self.workspace.logger().clone();
-            let to_pdf = async move |path: PathBuf| -> Result<PathBuf, failure::Error> {
+            let to_pdf = move |path: PathBuf| -> Pin<Box<dyn Future<Output=Result<PathBuf, failure::Error>> + Send>> {
                 match path.extension() {
-                    Some(extension) if extension == "pdf" => return Ok(path),
-                    None => Ok(path),
-                    Some(_) => image_to_pdf(logger, path.clone()).await,
+                    Some(extension) if extension == "pdf" => return futures::future::ready(Ok(path)).boxed(),
+                    None => futures::future::ready(Ok(path)).boxed(),
+                    Some(_) => image_to_pdf(logger, path.clone()).boxed(),
                 }
             };
             futures.push(to_pdf(path));

@@ -1,12 +1,10 @@
 use crate::prelude::*;
 use crate::renderer::Renderer;
 
-pub(crate) async fn preview(mut context: Context) -> Result<Response, EndpointError> {
-    let document_spec: DocumentSpec = body_json(&mut context).await?;
+pub(crate) async fn preview(document_spec: DocumentSpec, config: Arc<Config>) -> Result<Response, EndpointError> {
+    document_spec.validate(&config)?;
 
-    document_spec.validate(&context.config())?;
-
-    let mut renderer = Renderer::new(context.config(), document_spec)?;
+    let mut renderer = Renderer::new(config, document_spec)?;
     let populated_template = renderer.preview().await?;
 
     Ok(http::Response::new(populated_template.into()))

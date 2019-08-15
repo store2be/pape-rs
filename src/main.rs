@@ -39,7 +39,7 @@ fn main() -> Result<(), failure::Error> {
     let opts = Cli::from_args();
     match opts.command {
         Some(Command::Server) | None => {
-            papers::app(Arc::new(papers::Config::from_env())).serve(port)?;
+            warp::serve(papers::app(Arc::new(papers::Config::from_env()))).run(port)
         }
         Some(Command::Local) => papers::local_server::render_locally(),
         Some(Command::Version) => println!(env!("CARGO_PKG_VERSION")),

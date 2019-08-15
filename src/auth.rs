@@ -1,56 +1,39 @@
 use crate::prelude::*;
-use futures::FutureExt;
-use tide::middleware::{Middleware, Next};
+use warp::{
+    filters::{header::header, BoxedFilter},
+    Filter,
+};
 
-/// Check the Authorization header against a secret.
-pub struct AuthMiddleware {
-    secret: String,
-    bearer_re: regex::Regex,
+/// Reject with a 403.
+fn reject_forbidden() -> warp::Rejection {
+    EndpointError::Forbidden {
+        cause: format_err!("Missing or invalid Authorization header"),
+    }
+    .into_rejection()
 }
 
-/// Create a 403 response.
-fn forbidden() -> Response {
-    let mut response = empty_response();
-    *response.status_mut() = http::StatusCode::FORBIDDEN;
-    response
+/// Extract the token from a "Bearer <token>" formatted authorization header.
+fn extract_bearer(header: &str) -> Option<&str> {
+    let bearer_re = regex::Regex::new(r"^[Bb]earer (.*)$").unwrap();
+    bearer_re
+        .captures(header)
+        .and_then(|captures| captures.get(1))
+        .map(|capture| capture.as_str())
 }
 
-impl AuthMiddleware {
-    pub fn new(secret: String) -> AuthMiddleware {
-        AuthMiddleware {
-            secret,
-            bearer_re: regex::Regex::new(r"^[Bb]earer (.*)$").unwrap(),
-        }
-    }
+/// A filter that rejects unauthorized requests based on `secret`.
+pub(crate) fn auth_filter(secret: String) -> BoxedFilter<()> {
+    header("Authorization")
+        .and_then(move |auth_header: String| {
+            let token: Option<&str> = extract_bearer(&auth_header);
 
-    async fn async_handle<'a>(&'a self, context: Context, next: Next<'a, AppState>) -> Response {
-        let auth_header = context.headers().get(http::header::AUTHORIZATION);
-        let token: Option<&str> = auth_header
-            .and_then(|header| header.to_str().ok())
-            .and_then(|header| self.extract_bearer(header));
-
-        match token {
-            Some(token) if token == self.secret => next.run(context).await,
-            _ => forbidden(),
-        }
-    }
-
-    fn extract_bearer<'a>(&self, value: &'a str) -> Option<&'a str> {
-        self.bearer_re
-            .captures(value)
-            .and_then(|captures| captures.get(1))
-            .map(|capture| capture.as_str())
-    }
-}
-
-impl Middleware<AppState> for AuthMiddleware {
-    fn handle<'a>(
-        &'a self,
-        context: Context,
-        next: Next<'a, AppState>,
-    ) -> futures::future::BoxFuture<'a, Response> {
-        self.async_handle(context, next).boxed()
-    }
+            match token {
+                Some(token) if token == secret => Ok(()),
+                _ => Err(reject_forbidden()),
+            }
+        })
+        .untuple_one()
+        .boxed()
 }
 
 #[cfg(test)]
@@ -59,14 +42,7 @@ mod tests {
 
     #[test]
     fn auth_token_extraction() {
-        let middleware = AuthMiddleware::new("irrelevant".to_owned());
-        assert_eq!(
-            "my-secret",
-            middleware.extract_bearer("Bearer my-secret").unwrap()
-        );
-        assert_eq!(
-            "my-secret",
-            middleware.extract_bearer("bearer my-secret").unwrap()
-        );
+        assert_eq!("my-secret", extract_bearer("Bearer my-secret").unwrap());
+        assert_eq!("my-secret", extract_bearer("bearer my-secret").unwrap());
     }
 }

@@ -129,10 +129,7 @@ impl Renderer {
         let mut futures = futures::stream::FuturesUnordered::new();
 
         for uri in self.document_spec.asset_urls() {
-            let uri: hyper::Uri = uri.to_owned();
-            // We need a closure to take ownership of `uri`.
-            let download = async move || self.workspace.download_file(&uri).await;
-            futures.push(download());
+            futures.push(self.workspace.download_file(uri));
         }
 
         let futures: Vec<Result<_, _>> = futures.collect().await;

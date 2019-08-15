@@ -3,13 +3,11 @@ use crate::prelude::*;
 use crate::renderer::Renderer;
 use futures::{FutureExt, TryFutureExt};
 
-pub(crate) async fn submit(mut context: Context) -> Result<Response, EndpointError> {
-    let document_spec: DocumentSpec = body_json(&mut context).await?;
-
-    document_spec.validate(&context.config())?;
+pub(crate) async fn submit(document_spec: DocumentSpec, config: Arc<Config>) -> Result<Response, EndpointError> {
+    document_spec.validate(&config)?;
 
     tokio::executor::spawn(
-        Renderer::new(context.config(), document_spec)?
+        Renderer::new(config, document_spec)?
             .render()
             .boxed()
             .compat(),

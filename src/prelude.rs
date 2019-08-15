@@ -1,53 +1,32 @@
 //! Common imports used throughout the App. We should strive to keep this minimal.
 
 pub(crate) use crate::config::Config;
-pub(crate) use crate::utils::http::{ReqwestResponseExt as _};
 pub(crate) use crate::papers::{DocumentSpec, MergeSpec, PapersUri};
+pub(crate) use crate::utils::http::ReqwestResponseExt as _;
+use failure::Fail;
 pub use failure::{format_err, ResultExt as _};
 pub use std::sync::Arc;
-use failure::Fail;
 
-pub(crate) type Context = tide::Context<AppState>;
-pub type Response = http::Response<http_service::Body>;
-
-pub trait ContextExt {
-    /// Getter for the application configuration.
-    fn config(&self) -> Arc<Config>;
-}
-
-impl ContextExt for Context {
-    fn config(&self) -> Arc<Config> {
-        self.app_data().config.clone()
-    }
-}
-
-/// Extract a JSON payload from a request body.
-///
-/// This can't be on [ContextExt](ContextExt) directly yet because traits can't contain async functions.
-pub async fn body_json<T: serde::de::DeserializeOwned>(
-    context: &mut Context,
-) -> Result<T, EndpointError> {
-    let bytes = context.body_bytes().await?;
-    Ok(serde_json::from_slice(&bytes)?)
-}
-
-pub struct AppState {
-    pub config: Arc<Config>,
-}
-
-impl AppState {
-    pub fn new(config: Arc<Config>) -> AppState {
-        AppState { config }
-    }
-}
+pub type Response = http::Response<hyper::Body>;
 
 /// An error that can bubble up into our endpoints, and be translated into an error response.
 #[derive(Debug, Fail)]
 pub enum EndpointError {
+    #[fail(display = "Forbidden (403)")]
+    Forbidden {
+        #[fail(cause)]
+        cause: failure::Error,
+    },
     #[fail(display = "Internal Server Error (500)")]
-    InternalServerError { #[fail(cause)] cause: failure::Error },
+    InternalServerError {
+        #[fail(cause)]
+        cause: failure::Error,
+    },
     #[fail(display = "Unprocessable Entity (422)")]
-    UnprocessableEntity { #[fail(cause)] cause: failure::Error },
+    UnprocessableEntity {
+        #[fail(cause)]
+        cause: failure::Error,
+    },
 }
 
 impl From<serde_json::error::Error> for EndpointError {
@@ -71,7 +50,7 @@ impl From<failure::Error> for EndpointError {
 /// Create an empty response with the provided body. Status code is 200 by default, and there is no
 /// Content-Type.
 pub(crate) fn empty_response() -> Response {
-    http::Response::new(http_service::Body::empty())
+    http::Response::new(hyper::Body::empty())
 }
 
 /// Create a JSON response with the provided body. Status code is 200 by default.
@@ -84,11 +63,23 @@ pub(crate) fn json_response<T: serde::Serialize>(body: &T) -> Result<Response, f
     Ok(response)
 }
 
-impl tide::response::IntoResponse for EndpointError {
-    fn into_response(self) -> Response {
-use serde_json::json;
+impl EndpointError {
+    pub(crate) fn into_rejection(self) -> warp::Rejection {
+        warp::reject::custom(self.compat())
+    }
+
+    pub(crate) fn to_response(&self) -> Response {
+        use serde_json::json;
 
         match self {
+            EndpointError::Forbidden { cause } => {
+                let body = json!({
+                    "message": display_error(&cause),
+                });
+                let mut response = json_response(&body).expect("serialization error");
+                *response.status_mut() = http::StatusCode::FORBIDDEN;
+                response
+            }
             EndpointError::InternalServerError { .. } => {
                 let mut response = empty_response();
                 *response.status_mut() = http::StatusCode::INTERNAL_SERVER_ERROR;

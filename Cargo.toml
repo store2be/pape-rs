@@ -9,10 +9,8 @@ chrono = "0.4.0"
 dotenv = "0.11.0"
 failure = { version = "0.1.5", features = ["derive"] }
 futures01 = { package = "futures", version = "0.1.26" }
-futures-preview = { version = "0.3.0-alpha.16", features = ["compat"] }
+futures-preview = { version = "0.3.0-alpha.18", features = ["compat"] }
 http = "0.1.16"
-http-service = "0.2.0"
-http-service-hyper = "0.2.0"
 hyper = "0.12.28"
 hyperx = "0.15.0"
 log = "0.3.8"
@@ -30,13 +28,13 @@ sloggers = "^0.2"
 structopt = "0.2.15"
 tar = "0.4.14"
 tera = "^0.10"
-tide = "0.2.0"
 tokio = "0.1.19"
 tokio-core = "0.1.10"
 tokio-fs = "0.1.6"
 tokio-io = "0.1.12"
 tokio-process = "0.2.0"
 uuid = { version = "0.6", features = ["v4"] }
+warp = "0.1.18"
 
 [dependencies.slog]
 version = "^2"
@@ -45,4 +43,3 @@ features = ["max_level_debug", "release_max_level_debug"]
 [dev-dependencies]
 quickcheck = "0.4.1"
 rand = "0.3.18"
-tide-static-files = { path = "/home/tom/oss/tide-static-files" }
