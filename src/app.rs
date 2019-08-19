@@ -77,9 +77,9 @@ pub fn app(config: Arc<Config>) -> BoxedFilter<(impl warp::Reply,)> {
                 .compat()
         });
 
-    let routes = healthz.or(merge).or(submit).or(preview);
+    let routes = merge.or(submit).or(preview);
 
-    base.and(routes).recover(recover).boxed()
+    healthz.or(base.and(routes)).recover(recover).boxed()
 }
 
 fn recover(rejection: warp::Rejection) -> Result<Response, warp::Rejection> {
