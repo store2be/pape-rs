@@ -162,15 +162,15 @@ The maximum size of assets in bytes (or with K, M or G suffix).
 Default: 10M
 ```
 
-### PAPERS_AWS_ACCESS_KEY
+### PAPERS_ACCESS_KEY_ID
 
 The key will be used for the S3 uploads.
 
 Required.
 
-### PAPERS_AWS_SECRET_KEY
+### PAPERS_SECRET_ACCESS_KEY
 
-The secret key corresponding to `PAPERS_AWS_ACCESS_KEY`.
+The secret key corresponding to `PAPERS_ACCESS_KEY_ID`.
 
 Required.
 
