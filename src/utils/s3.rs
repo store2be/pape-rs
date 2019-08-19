@@ -21,7 +21,7 @@ pub async fn post_to_s3(
 ) -> Result<(), failure::Error> {
     use futures::compat::*;
 
-    let client = rusoto_s3::S3Client::new(config.s3.region.clone());
+    let client = config.s3.client();
 
     debug!(config.logger, "Uploading {:?} to {:?}.", path, key);
     let file = File::open(path).compat().await?;

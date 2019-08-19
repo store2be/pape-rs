@@ -51,6 +51,18 @@ pub struct S3Config {
     pub expiration_time: u32,
     /// The AWS credentials.
     pub credentials: rusoto_credential::AwsCredentials,
+    /// The AWS credentials provider.
+    credentials_provider: rusoto_credential::EnvironmentProvider,
+}
+
+impl S3Config {
+    pub(crate) fn client(&self) -> rusoto_s3::S3Client {
+        rusoto_s3::S3Client::new_with(
+            rusoto_core::request::HttpClient::new().unwrap(),
+            self.credentials_provider.clone(),
+            self.region.clone(),
+        )
+    }
 }
 
 /// Please refer to the README for more details about configuration
@@ -80,6 +92,7 @@ impl Config {
             s3: S3Config {
                 bucket: "walrus".into(),
                 credentials: rusoto_credential::AwsCredentials::new("a", "b", None, None),
+                credentials_provider: rusoto_credential::EnvironmentProvider::default(),
                 expiration_time: 3600,
                 region: rusoto_core::region::Region::Custom {
                     endpoint: "http://s3.localhost".into(),
@@ -113,7 +126,9 @@ impl Config {
             .parse()
             .expect("PAPERS_S3_EXPIRATION_TIME should be a duration in seconds");
 
-        let credentials = rusoto_credential::EnvironmentProvider::with_prefix("PAPERS")
+        let credentials_provider = rusoto_credential::EnvironmentProvider::with_prefix("PAPERS");
+
+        let credentials = credentials_provider
             .credentials()
             .wait()
             .expect("error reading AWS credentials from environment");
@@ -121,8 +136,8 @@ impl Config {
         let s3 = S3Config {
             bucket: std::env::var("PAPERS_S3_BUCKET")
                 .expect("The PAPERS_S3_BUCKET environment variable was not provided"),
-
             credentials,
+            credentials_provider,
             region: aws_region_string
                 .parse()
                 .expect("The provided AWS region is not valid"),
