@@ -28,6 +28,7 @@ struct Cli {
 
 fn main() -> Result<(), failure::Error> {
     dotenv().ok();
+    pretty_env_logger::init();
 
     let port = std::env::var("PAPERS_PORT").unwrap_or_else(|_| "8080".to_string());
     let port: std::net::SocketAddr = ([0, 0, 0, 0], port.parse()?).into();
