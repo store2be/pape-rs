@@ -1,6 +1,7 @@
 .cargo
 .env
 target/
+docker/target
 **/*.rs.bk
 *.aux
 *.log
