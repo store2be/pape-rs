@@ -13,7 +13,6 @@ futures-preview = { version = "0.3.0-alpha.18", features = ["compat"] }
 http = "0.1.18"
 hyper = "0.12.33"
 hyperx = "0.15.1"
-log = "0.4.8"
 mktemp = "0.4.0"
 regex = "1.2.1"
 reqwest = "0.9.19"
