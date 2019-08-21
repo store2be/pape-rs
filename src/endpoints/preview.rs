@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use crate::renderer::Renderer;
+use crate::papers::Renderer;
 
 pub(crate) async fn preview(document_spec: DocumentSpec, config: Arc<Config>) -> Result<Response, EndpointError> {
     document_spec.validate(&config)?;

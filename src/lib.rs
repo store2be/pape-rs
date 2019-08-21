@@ -25,7 +25,6 @@ pub mod local_server;
 pub mod papers;
 /// Prelude.
 mod prelude;
-mod renderer;
 /// Utility modules.
 pub mod utils;
 
