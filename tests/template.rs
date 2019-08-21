@@ -1,5 +1,3 @@
-#![feature(async_await)]
-
 mod toolbox;
 
 use serde_json::json;
