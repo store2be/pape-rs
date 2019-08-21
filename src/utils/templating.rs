@@ -1,4 +1,4 @@
-use latex::{escape_tex, unescape_tex};
+use crate::latex::{escape_tex, unescape_tex};
 use serde_json::Value;
 use std::collections::HashMap;
 use tera::{Error, Tera};
@@ -11,6 +11,7 @@ fn unescape_tex_filter(json: Value, _: HashMap<String, Value>) -> Result<Value, 
     Ok(unescape_tex(json))
 }
 
+/// Create an instance of the Tera templating engine, with Papers-specific filters.
 pub fn make_tera() -> Tera {
     let mut tera = Tera::default();
     tera.register_filter("escape_tex", escape_tex_filter);
@@ -21,6 +22,7 @@ pub fn make_tera() -> Tera {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn make_tera_surfaces_working_escape_filter() {

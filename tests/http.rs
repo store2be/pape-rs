@@ -1,44 +1,30 @@
-extern crate futures;
-extern crate hyper;
-#[macro_use]
-extern crate lazy_static;
-extern crate papers;
-extern crate tokio_core;
+mod toolbox;
 
-use futures::Future;
-use hyper::server::Service;
-use hyper::Request;
-use papers::config::Config;
-use papers::papers::Papers;
-use papers::test_utils::NilService;
-
-fn config() -> &'static Config {
-    lazy_static! {
-        static ref CONFIG: Config = Config::from_env();
-    }
-    &CONFIG
-}
+use toolbox::*;
 
 #[test]
 fn test_health_check() {
-    let core = tokio_core::reactor::Core::new().unwrap();
-    let service: Papers<NilService> = Papers::new(core.remote(), config());
-    let request = Request::new(
-        hyper::Method::Get,
-        "http://127.0.0.1:8018/healthz".parse().unwrap(),
-    );
-    let response = service.call(request).wait().unwrap();
-    assert_eq!(response.status(), hyper::StatusCode::Ok);
+    let test_setup = TestSetup::start_default();
+
+    let healthz_url = test_setup.papers_url("healthz");
+    let response = test_setup.client().get(&healthz_url).send().unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    let response = test_setup.client().head(&healthz_url).send().unwrap();
+
+    assert_eq!(response.status(), 200);
 }
 
 #[test]
 fn test_404() {
-    let core = tokio_core::reactor::Core::new().unwrap();
-    let service: Papers<NilService> = Papers::new(core.remote(), config());
-    let request = Request::new(
-        hyper::Method::Get,
-        "http://127.0.0.1:8018/dead-end".parse().unwrap(),
-    );
-    let response = service.call(request).wait().unwrap();
-    assert_eq!(response.status(), hyper::StatusCode::NotFound);
+    let test_setup = TestSetup::start_default();
+
+    let response = test_setup
+        .client()
+        .get(&test_setup.papers_url("dead-end"))
+        .send()
+        .unwrap();
+
+    assert_eq!(response.status(), 404);
 }

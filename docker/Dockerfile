@@ -4,6 +4,6 @@ ENV TERM=screen
 
 WORKDIR /papers
 
-COPY target/release/papers .
+COPY docker/target/release/papers .
 
 CMD ./papers

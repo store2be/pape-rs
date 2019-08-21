@@ -1,42 +1,68 @@
-use chrono::{DateTime, Duration, Utc};
-use dotenv::dotenv;
-use human_size::Bytes;
-use rusoto::credential::{AwsCredentials, CredentialsError, ProvideAwsCredentials};
-use rusoto::region::Region;
-use slog::{self, Logger};
+use crate::human_size::Bytes;
+use rusoto_core::region::Region;
+use slog::{o, warn, Logger};
 use sloggers::types::Severity;
-use sloggers::{self, Build};
+use sloggers::Build;
 use std::str::FromStr;
 
-fn max_assets_per_document(logger: &Logger) -> u8 {
-    let default = 20;
-    match ::std::env::var("PAPERS_MAX_ASSETS_PER_DOCUMENT").map(|max| max.parse()) {
+const MAX_ASSET_SIZE_DEFAULT: u32 = 10_000_000;
+const MAX_ASSETS_PER_DOCUMENT_DEFAULT: u32 = 20;
+
+fn max_assets_per_document(logger: &Logger) -> u32 {
+    match std::env::var("PAPERS_MAX_ASSETS_PER_DOCUMENT").map(|max| max.parse()) {
         Ok(Ok(max)) => max,
         Ok(Err(_)) => {
             warn!(
                 logger,
                 "Unable to parse PAPERS_MAX_ASSETS_PER_DOCUMENT environment variable"
             );
-            default
+            MAX_ASSETS_PER_DOCUMENT_DEFAULT
         }
-        _ => default,
+        _ => MAX_ASSETS_PER_DOCUMENT_DEFAULT,
     }
 }
 
-pub fn is_debug_active() -> bool {
-    match ::std::env::var("PAPERS_LOG_LEVEL") {
-        Ok(ref level) if level.contains("debug") => true,
-        _ => false,
-    }
+/// Relies on the PAPERS_LOG_LEVEL env variable.
+pub fn build_logger() -> Logger {
+    let minimum_level = if let Ok("debug") = std::env::var("PAPERS_LOG_LEVEL")
+        .as_ref()
+        .map(String::as_str)
+    {
+        Severity::Debug
+    } else {
+        Severity::Info
+    };
+
+    let drain = sloggers::terminal::TerminalLoggerBuilder::new()
+        .level(minimum_level)
+        .build()
+        .expect("Could not build a terminal logger");
+    slog::Logger::root(drain, o!("version" => env!("CARGO_PKG_VERSION")))
 }
 
+/// Configuration for the S3 integration.
 #[derive(Debug)]
 pub struct S3Config {
+    /// The bucket name.
     pub bucket: String,
-    pub access_key: String,
-    pub secret_key: String,
+    /// The AWS region of the bucket.
     pub region: Region,
+    /// The expiration time of presigned URLs in seconds.
     pub expiration_time: u32,
+    /// The AWS credentials.
+    pub credentials: rusoto_credential::AwsCredentials,
+    /// The AWS credentials provider.
+    credentials_provider: rusoto_credential::EnvironmentProvider,
+}
+
+impl S3Config {
+    pub(crate) fn client(&self) -> rusoto_s3::S3Client {
+        rusoto_s3::S3Client::new_with(
+            rusoto_core::request::HttpClient::new().unwrap(),
+            self.credentials_provider.clone(),
+            self.region.clone(),
+        )
+    }
 }
 
 /// Please refer to the README for more details about configuration
@@ -44,9 +70,9 @@ pub struct S3Config {
 pub struct Config {
     /// A long secret that is used in the Authorization header to authenticate a request against
     /// papers
-    pub auth: String,
+    pub auth: Option<String>,
     /// Limits the number of assets allowed for a given DocumentSpec
-    pub max_assets_per_document: u8,
+    pub max_assets_per_document: u32,
     /// Limits the size of the assets downloaded by the service, including templates
     pub max_asset_size: u32,
     /// The root logger for the application
@@ -56,45 +82,62 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_env() -> Config {
-        dotenv().ok();
+    /// Create a default `Config` for testing purposes.
+    pub fn for_tests() -> Config {
+        Config {
+            auth: None,
+            logger: build_logger(),
+            max_asset_size: MAX_ASSET_SIZE_DEFAULT,
+            max_assets_per_document: MAX_ASSETS_PER_DOCUMENT_DEFAULT,
+            s3: S3Config {
+                bucket: "walrus".into(),
+                credentials: rusoto_credential::AwsCredentials::new("a", "b", None, None),
+                credentials_provider: rusoto_credential::EnvironmentProvider::default(),
+                expiration_time: 3600,
+                region: rusoto_core::region::Region::Custom {
+                    endpoint: "http://s3.localhost".into(),
+                    name: "local_s3".into(),
+                },
+            },
+        }
+    }
 
-        let max_asset_size = ::std::env::var("PAPERS_MAX_ASSET_SIZE")
+    /// The normal way to construct a `Config`, reading from environment variables.
+    pub fn from_env() -> Config {
+        use futures01::Future;
+        use rusoto_credential::ProvideAwsCredentials;
+
+        let max_asset_size = std::env::var("PAPERS_MAX_ASSET_SIZE")
             .map_err(|_| ())
             .and_then(|s| Bytes::from_str(&s))
             .map(|bytes| bytes.0)
-            .unwrap_or(10_000_000);
+            .unwrap_or(MAX_ASSET_SIZE_DEFAULT);
 
-        let auth = ::std::env::var("PAPERS_BEARER").unwrap_or_else(|_| "".to_string());
+        let auth = std::env::var("PAPERS_BEARER").ok();
 
-        let minimum_level = if is_debug_active() {
-            Severity::Debug
-        } else {
-            Severity::Info
-        };
-        let drain = sloggers::terminal::TerminalLoggerBuilder::new()
-            .level(minimum_level)
-            .build()
-            .expect("Could not build a terminal logger");
-        let logger = slog::Logger::root(drain, o!());
-
+        let logger = build_logger();
         let max_assets_per_document = max_assets_per_document(&logger);
 
-        let aws_region_string = ::std::env::var("PAPERS_AWS_REGION")
+        let aws_region_string = std::env::var("PAPERS_AWS_REGION")
             .expect("The PAPERS_AWS_REGION environment variable was not provided");
 
-        let expiration_time: u32 = ::std::env::var("PAPERS_S3_EXPIRATION_TIME")
+        let expiration_time: u32 = std::env::var("PAPERS_S3_EXPIRATION_TIME")
             .unwrap_or_else(|_| "86400".to_string()) // one day
             .parse()
             .expect("PAPERS_S3_EXPIRATION_TIME should be a duration in seconds");
 
+        let credentials_provider = rusoto_credential::EnvironmentProvider::with_prefix("PAPERS");
+
+        let credentials = credentials_provider
+            .credentials()
+            .wait()
+            .expect("error reading AWS credentials from environment");
+
         let s3 = S3Config {
-            bucket: ::std::env::var("PAPERS_S3_BUCKET")
+            bucket: std::env::var("PAPERS_S3_BUCKET")
                 .expect("The PAPERS_S3_BUCKET environment variable was not provided"),
-            access_key: ::std::env::var("PAPERS_AWS_ACCESS_KEY")
-                .expect("The PAPERS_AWS_ACCESS_KEY environment variable was not provided"),
-            secret_key: ::std::env::var("PAPERS_AWS_SECRET_KEY")
-                .expect("The PAPERS_AWS_SECRET_KEY environment variable was not provided"),
+            credentials,
+            credentials_provider,
             region: aws_region_string
                 .parse()
                 .expect("The provided AWS region is not valid"),
@@ -110,25 +153,19 @@ impl Config {
         }
     }
 
+    /// Return a new `Config` with the specified auth secret.
     pub fn with_auth(self, auth: String) -> Config {
-        Config { auth, ..self }
+        Config {
+            auth: Some(auth),
+            ..self
+        }
     }
 
-    pub fn with_max_assets_per_document(self, max_assets_per_document: u8) -> Config {
+    /// Set `max_assets_per_documents` and return `self`.
+    pub fn with_max_assets_per_document(self, max_assets_per_document: u32) -> Config {
         Config {
             max_assets_per_document,
             ..self
         }
-    }
-}
-
-impl<'a> ProvideAwsCredentials for &'a Config {
-    fn credentials(&self) -> Result<AwsCredentials, CredentialsError> {
-        Ok(AwsCredentials::new(
-            self.s3.access_key.clone(),
-            self.s3.secret_key.clone(),
-            None,
-            DateTime::<Utc>::checked_add_signed(Utc::now(), Duration::days(1)).unwrap(),
-        ))
     }
 }

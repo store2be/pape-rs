@@ -1,7 +1,8 @@
 language: rust
 rust:
-  - stable
-  - beta
+  # Disabled because async-await is not on these channels yet.
+  # - stable
+  # - beta
   - nightly
 cache: cargo
 before_script:

@@ -1,4 +1,4 @@
-use slog::{Drain, Duplicate, Logger};
+use slog::{o, Drain, Duplicate, Logger};
 use sloggers::file::FileLoggerBuilder;
 use sloggers::types::Severity;
 use sloggers::Build;

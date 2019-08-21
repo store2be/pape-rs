@@ -1,57 +1,32 @@
-// #![deny(warnings)]
-// `error_chain!` can recurse deeply
-#![recursion_limit = "1024"]
+//! # papers
+//!
+//! These docs are for papers as a library. This is not a supported use case for now, we expose
+//! exports to make integration testing easier internally. This may become more fleshed out over
+//! time.
+//!
+//! For documentation on the service itself, which is meant to be used as an executable, please
+//! refer to the [README](https://github.com/store2be/pape-rs).
 
-extern crate chrono;
-extern crate dotenv;
-#[macro_use]
-extern crate error_chain;
-extern crate futures;
-extern crate futures_cpupool;
-extern crate hyper;
-extern crate hyper_tls;
-#[macro_use]
-extern crate lazy_static;
-extern crate mime;
-extern crate mktemp;
-#[cfg(test)]
-#[macro_use]
-extern crate quickcheck;
-extern crate regex;
-extern crate rusoto_core as rusoto;
-extern crate rusoto_s3 as s3;
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate serde_json;
-#[macro_use]
-extern crate slog;
-extern crate sentry;
-extern crate sloggers;
-extern crate tar;
-extern crate tera;
-extern crate tokio_core;
-extern crate tokio_io;
-extern crate tokio_process;
-extern crate uuid;
+#![deny(rust_2018_idioms)]
+#![deny(warnings)]
+#![deny(missing_docs)]
 
+mod app;
+mod auth;
+/// Service configuration.
 pub mod config;
-pub mod error;
-pub mod http;
+mod endpoints;
 mod human_size;
-pub mod latex;
+/// Latex-related utilities.
+mod latex;
+/// Papers local.
 pub mod local_server;
+/// Core logic for the asynchronous jobs.
 pub mod papers;
-pub mod renderer;
-pub mod server;
-pub mod test_utils;
+/// Prelude.
+mod prelude;
+/// Utility modules.
 pub mod utils;
 
-pub mod prelude {
-    pub use config::Config;
-    pub use error::{Error, ErrorKind};
-    pub use papers::{DocumentSpec, FromHandle, Papers, PapersUri, Summary};
-    pub use renderer::Renderer;
-    pub use server::Server;
-}
+pub use app::app;
+pub use config::Config;

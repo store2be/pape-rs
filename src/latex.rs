@@ -2,21 +2,13 @@ use regex::Regex;
 use serde_json::Value;
 
 pub fn unescape_tex_string(string: &str) -> String {
-    lazy_static! {
-        static ref ESCAPED_TEX_SPECIAL_CHARACTER: Regex = Regex::new(r"\\([&%$#_{}])").unwrap();
-    }
-    ESCAPED_TEX_SPECIAL_CHARACTER
-        .replace_all(string, "$1")
-        .to_string()
+    let re = Regex::new(r"\\([&%$#_{}])").unwrap();
+    re.replace_all(string, "$1").to_string()
 }
 
 pub fn escape_tex_string(string: &str) -> String {
-    lazy_static! {
-        static ref TEX_SPECIAL_CHARACTER: Regex = Regex::new(r"([&%$#_{}])").unwrap();
-    }
-    TEX_SPECIAL_CHARACTER
-        .replace_all(string, "\\$1")
-        .to_string()
+    let re = Regex::new(r"([&%$#_{}])").unwrap();
+    re.replace_all(string, "\\$1").to_string()
 }
 
 pub fn unescape_tex(json: Value) -> Value {
@@ -27,7 +19,7 @@ pub fn escape_tex(json: Value) -> Value {
     transform_strings(json, &escape_tex_string)
 }
 
-fn transform_strings(json: Value, callback: &Fn(&str) -> String) -> Value {
+fn transform_strings(json: Value, callback: &dyn Fn(&str) -> String) -> Value {
     match json {
         Value::String(s) => Value::String(callback(&s)),
         Value::Object(obj) => Value::Object(
@@ -48,6 +40,8 @@ fn transform_strings(json: Value, callback: &Fn(&str) -> String) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use quickcheck::*;
+    use serde_json::json;
 
     #[test]
     fn escape_tex_does_not_alter_basic_json_strings() {
