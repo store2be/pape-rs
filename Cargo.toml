@@ -1,6 +1,6 @@
 [package]
 name = "papers"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["store2be <tech@store2be.com>"]
 edition = "2018"
 

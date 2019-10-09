@@ -5,10 +5,15 @@
 
 ## Unreleased
 
-### Fixes
+## [0.4.1] - 2019-10-09
+- Use `futures::stream::FuturesOrdered` to maintain the order of the merge PDFs.
 
+## [0.4.0] - 2019-08-21
+- Use `async-await`
+- Replace `tide` with `warp`
 - Save merge assets with V4 UUIDs as file names instead of using the original file names to avoid errors when users upload files with the same name.
 - Reject merge requests with an empty list of documents to merge
+- Bug fixes and cleanup
 
 ## [0.3.0] - 2018-05-11
 - Add Sentry for error tracking
