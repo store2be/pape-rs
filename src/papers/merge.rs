@@ -105,7 +105,7 @@ impl Merger {
         &self,
         asset_paths: Vec<PathBuf>,
     ) -> Result<Vec<PathBuf>, failure::Error> {
-        let mut futures = futures::stream::FuturesUnordered::new();
+        let mut futures = futures::stream::FuturesOrdered::new();
 
         for path in asset_paths.into_iter() {
             let logger = self.workspace.logger().clone();
