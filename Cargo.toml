@@ -1,6 +1,6 @@
 [package]
 name = "papers"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["store2be <tech@store2be.com>"]
 edition = "2018"
 
@@ -16,9 +16,9 @@ hyperx = "0.15.1"
 mktemp = "0.4.0"
 regex = "1.2.1"
 reqwest = "0.9.19"
-rusoto_core = "0.40.0"
-rusoto_credential = "0.40.0"
-rusoto_s3 = "0.40.0"
+rusoto_core = "0.41.0"
+rusoto_credential = "0.41.0"
+rusoto_s3 = "0.41.0"
 sentry = "0.16.0"
 serde_json = "1.0.40"
 serde = { version = "1.0.98", features = ["derive"] }

@@ -5,6 +5,9 @@
 
 ## Unreleased
 
+## [0.4.2] - 2019-10-22
+- Update Rusoto to version 0.41.0
+
 ## [0.4.1] - 2019-10-09
 - Use `futures::stream::FuturesOrdered` to maintain the order of the merge PDFs.
 
