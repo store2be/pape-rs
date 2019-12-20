@@ -9,7 +9,7 @@ chrono = "0.4.10"
 dotenv = "0.14.1"
 failure = { version = "0.1.5", features = ["derive"] }
 futures-preview = { version = "0.3.0-alpha.19", features = ["compat"] }
-futures01 = { package = "futures", version = "0.1.26" }
+futures01 = { version = "0.1.29", package = "futures" }
 http = "0.1.18"
 hyper = "0.12.33"
 hyperx = "0.15.1"
