@@ -22,6 +22,23 @@ fn max_assets_per_document(logger: &Logger) -> u32 {
     }
 }
 
+fn aws_region() -> rusoto_core::region::Region {
+    std::env::var("PAPERS_LOCALSTACK_ENDPOINT")
+        .and_then(|ep| {
+            Ok(rusoto_core::region::Region::Custom {
+                endpoint: ep,
+                name: "localstack".to_owned(),
+            })
+        })
+        .or_else::<rusoto_core::region::Region, _>(|_| {
+            Ok(std::env::var("PAPERS_AWS_REGION")
+                .expect("The PAPERS_AWS_REGION environment variable was not provided")
+                .parse::<rusoto_core::region::Region>()
+                .expect("The provided AWS region is not valid"))
+        })
+        .expect("Something went wrong with processing the AWS region")
+}
+
 /// Relies on the PAPERS_LOG_LEVEL env variable.
 pub fn build_logger() -> Logger {
     let minimum_level = if let Ok("debug") = std::env::var("PAPERS_LOG_LEVEL")
@@ -118,9 +135,6 @@ impl Config {
         let logger = build_logger();
         let max_assets_per_document = max_assets_per_document(&logger);
 
-        let aws_region_string = std::env::var("PAPERS_AWS_REGION")
-            .expect("The PAPERS_AWS_REGION environment variable was not provided");
-
         let expiration_time: u32 = std::env::var("PAPERS_S3_EXPIRATION_TIME")
             .unwrap_or_else(|_| "86400".to_string()) // one day
             .parse()
@@ -138,9 +152,7 @@ impl Config {
                 .expect("The PAPERS_S3_BUCKET environment variable was not provided"),
             credentials,
             credentials_provider,
-            region: aws_region_string
-                .parse()
-                .expect("The provided AWS region is not valid"),
+            region: aws_region(),
             expiration_time,
         };
 
@@ -167,5 +179,31 @@ impl Config {
             max_assets_per_document,
             ..self
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_aws_region_localstack() {
+        std::env::set_var("PAPERS_LOCALSTACK_ENDPOINT", "my-endpoint");
+
+        assert_eq!(
+            aws_region(),
+            rusoto_core::region::Region::Custom {
+                endpoint: "my-endpoint".to_owned(),
+                name: "localstack".to_owned()
+            }
+        )
+    }
+
+    #[test]
+    fn test_aws_region_env() {
+        std::env::set_var("PAPERS_AWS_REGION", "us-east-1");
+
+        assert_eq!(aws_region(), rusoto_core::region::Region::UsEast1,)
     }
 }
