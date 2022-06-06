@@ -11,7 +11,7 @@ failure = { version = "0.1.5", features = ["derive"] }
 futures01 = { package = "futures", version = "0.1.26" }
 futures-preview = { version = "0.3.0-alpha.18", features = ["compat"] }
 http = "0.1.18"
-hyper = "0.12.33"
+hyper = "0.14.3"
 hyperx = "0.15.1"
 mktemp = "0.4.0"
 regex = "1.2.1"
